@@ -1,0 +1,20 @@
+{
+  "id": "english-sample",
+  "title": "영단어 샘플",
+  "subject": "영어",
+  "grade": "초등",
+  "units": [
+    { "id": "animals", "title": "동물" },
+    { "id": "food", "title": "음식" }
+  ],
+  "items": [
+    { "unit": "animals", "q": "cat", "answer": "고양이" },
+    { "unit": "animals", "q": "dog", "answer": "개" },
+    { "unit": "animals", "q": "rabbit", "answer": "토끼" },
+    { "unit": "animals", "q": "horse", "answer": "말" },
+    { "unit": "animals", "q": "duck", "answer": "오리" },
+    { "unit": "food", "q": "apple", "answer": "사과" },
+    { "unit": "food", "q": "bread", "answer": "빵" },
+    { "unit": "food", "q": "milk", "answer": "우유" }
+  ]
+}
