@@ -30,7 +30,7 @@ export async function mount(root, props) {
   el.innerHTML = `
     <header class="px-logo">
       <span class="px-logo-ico"></span>
-      <h1 class="px-title"><span>에너지</span><span>퀴즈 게임</span></h1>
+      <h1 class="px-title"><span>사부작</span><span>스쿨</span></h1>
     </header>
     <section class="px-panel" aria-label="현재 선택">
       <button type="button" class="px-sel" data-k="subject"><span class="px-sel-ico"></span><span class="px-sel-lab">과목</span><span class="px-sel-val"></span></button>
