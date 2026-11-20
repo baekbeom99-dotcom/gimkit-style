@@ -30,7 +30,8 @@ export async function mount(root, props) {
   el.innerHTML = `
     <header class="px-logo">
       <span class="px-logo-ico"></span>
-      <h1 class="px-title"><span>사부작</span><span>스쿨</span></h1>
+      <h1 class="px-title">사부작스쿨</h1>
+      <span class="px-logo-ico"></span>
     </header>
     <section class="px-panel" aria-label="현재 선택">
       <button type="button" class="px-sel" data-k="subject"><span class="px-sel-ico"></span><span class="px-sel-lab">과목</span><span class="px-sel-val"></span></button>
@@ -41,7 +42,7 @@ export async function mount(root, props) {
     <div class="px-toast" role="status" aria-live="polite"></div>`;
   root.appendChild(el);
   const $ = (s) => el.querySelector(s);
-  $('.px-logo-ico').appendChild(createIcon('bolt'));
+  el.querySelectorAll('.px-logo-ico').forEach((ico) => ico.appendChild(createIcon('bolt'))); // 양쪽 대칭 아이콘(글자가 정확히 가운데)
   const selBtns = { subject: $('[data-k=subject]'), set: $('[data-k=set]'), unit: $('[data-k=unit]') };
   selBtns.subject.querySelector('.px-sel-ico').appendChild(createIcon('subject'));
   selBtns.set.querySelector('.px-sel-ico').appendChild(createIcon('quiz'));

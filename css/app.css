@@ -163,10 +163,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .px-screen .px-icon{display:block;image-rendering:pixelated}
 .px-logo{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 14px}
 .px-logo-ico .px-icon{width:48px;height:48px;filter:drop-shadow(4px 4px 0 var(--px-edge))}
-.px-title{margin:0;display:flex;flex-direction:column;font-size:28px;line-height:1.15;font-weight:900;letter-spacing:0;color:var(--px-yel);
+.px-title{margin:0;display:block;white-space:nowrap;text-align:center;font-size:32px;line-height:1.15;font-weight:900;letter-spacing:0;color:var(--px-yel);
   text-shadow:2px 0 0 var(--px-edge),-2px 0 0 var(--px-edge),0 2px 0 var(--px-edge),0 -2px 0 var(--px-edge),
     2px 2px 0 var(--px-edge),4px 4px 0 var(--px-red)}
-.px-title span:last-child{color:#fff;font-size:24px}
 .px-panel{position:relative;margin:4px 4px 0;padding:12px;background:var(--px-panel);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;
   box-shadow:-4px 0 0 0 var(--px-edge),4px 0 0 0 var(--px-edge),0 -4px 0 0 var(--px-edge),0 4px 0 0 var(--px-edge),
     inset 4px 4px 0 0 var(--px-hi),inset -4px -4px 0 0 var(--px-lo),8px 8px 0 0 rgba(0,0,0,.35)}
