@@ -178,21 +178,28 @@ export function approach(v, target, a, dt) {
 }
 
 // 착지 떨림(시각 효과 전용). impact = 충돌 속도(px per 1/60s), heavy = 단단/콘크리트 벽돌
-export const TREMBLE = { sec: 0.3, amp: 2.5, rotDeg: 1.2, decay: 12, maxK: 1 };
+// 착지 진동(시각 효과 전용): 벽돌 하나가 아니라 게임 화면 전체가 아주 짧고 작게 진동한다.
+// (벽돌별 떨림은 "튕김"처럼 보여서 제거했다.) impact = 충돌 속도(px per 1/60s).
+export const VIBRATION = { sec: 0.24, ampX: 1.6, ampY: 1.2, decay: 13, maxK: 1 };
+// 단단/콘크리트 벽돌은 더 무거우니 조금 더 세게 울린다(상한 maxK)
 export function trembleStrength(impact, heavy = false) {
-  const k = Math.min(TREMBLE.maxK, 0.3 + Math.max(0, impact) / 5);
-  return heavy ? k * 0.4 : k;
+  const k = Math.min(VIBRATION.maxK, 0.3 + Math.max(0, impact) / 5);
+  return heavy ? Math.min(VIBRATION.maxK, k * 1.25) : k;
 }
-// t초 뒤의 흔들림 { dx, dy, rot(rad) }. 결정적(같은 t, k면 같은 값), 지수 감쇠, sec 이후 0
-export function trembleOffset(t, k) {
-  if (!(t >= 0) || t >= TREMBLE.sec || !(k > 0)) return { dx: 0, dy: 0, rot: 0 };
-  const e = Math.exp(-TREMBLE.decay * t) * k;
+// t초 뒤 화면 진동 { dx, dy }(px). 결정적(같은 t, k면 같은 값), 지수 감쇠, sec 이후 0.
+export function vibrationOffset(t, k) {
+  if (!(t >= 0) || t >= VIBRATION.sec || !(k > 0)) return { dx: 0, dy: 0 };
+  const e = Math.exp(-VIBRATION.decay * t) * k;
   const w = Math.PI * 2;
   return {
-    dx: TREMBLE.amp * e * Math.sin(w * 17 * t),
-    dy: TREMBLE.amp * 0.6 * e * Math.sin(w * 13 * t + 1.1),
-    rot: (TREMBLE.rotDeg * Math.PI / 180) * e * Math.sin(w * 15 * t + 2.3),
+    dx: VIBRATION.ampX * e * Math.sin(w * 28 * t),
+    dy: VIBRATION.ampY * e * Math.sin(w * 23 * t + 1.0),
   };
+}
+// 지금 진행 중인 진동의 남은 세기(새 충돌과 겹칠 때 더 센 쪽만 남기기 위함)
+export function vibrationRemaining(t, k) {
+  if (!(t >= 0) || t >= VIBRATION.sec || !(k > 0)) return 0;
+  return Math.exp(-VIBRATION.decay * t) * k;
 }
 
 // 콘크리트 아이템: 최고 높이가 10m의 배수에 처음 닿을 때마다 +1 (최대 보유 9)

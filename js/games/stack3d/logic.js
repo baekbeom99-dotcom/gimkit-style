@@ -111,12 +111,14 @@ export const SPARKLE_STAGGER = 0.06;
 export function sparkleDuration(perfect) {
   const n = sparkleCount(0, perfect);
   const sweep = perfect ? SPARKLE_SWEEP_PERFECT_SEC : SPARKLE_SWEEP_SEC;
+  if (n <= 0) return sweep; // 별이 없으면 빛줄기 시간만
   return Math.max(sweep, (n - 1) * SPARKLE_STAGGER + SPARKLE_STAR_SEC + 0.1);
 }
 
-// 일반 4~6개, 퍼펙트 6~8개 (층 번호로 결정)
+// 일반 4~6개 (층 번호로 결정). 퍼펙트는 별 모양 효과 없음(빛줄기와 흰 고리만).
 export function sparkleCount(layer, perfect) {
-  return (perfect ? 6 : 4) + (((layer % 3) + 3) % 3);
+  if (perfect) return 0;
+  return 4 + (((layer % 3) + 3) % 3);
 }
 
 function hash01(n) {

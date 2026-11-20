@@ -3,7 +3,7 @@ import { loadMatter } from '../../vendor/load-matter.js';
 import { createWorld, GROOVE, PLATFORM_H } from './world.js';
 import {
   SHAPES, createBag, createMagicSchedule, stageLinePx, stageLineM, fallSpeed, EFFECT_LABEL,
-  PX_PER_M, cellsSize, trembleStrength, trembleOffset, TREMBLE, concreteGrants, CONCRETE_MAX,
+  PX_PER_M, cellsSize, trembleStrength, vibrationOffset, vibrationRemaining, VIBRATION, concreteGrants, CONCRETE_MAX,
   MAGIC_INFO, INFO_SEC, splitInfo, infoAlpha,
 } from './logic.js';
 
@@ -94,7 +94,8 @@ export default {
     let granted = 0; // 10m마다 받은 횟수
     let itemBusy = false;
     let itemKey = '';
-    let lastTremble = null; // 검증용
+    let vib = null; // 화면 진동 { t, k } (착지 시)
+    let lastVib = null; // 검증용
     const parts = [];
     const toasts = [];
     const lostLog = [];
@@ -129,14 +130,14 @@ export default {
     }
 
     function onContact(brick, other, wasCtl, impact = 0) {
-      // 처음 닿는 순간 살짝 떨림(그림만, 물리 바디는 그대로)
-      const heavy = brick.tint === 'steel' || !!brick.concrete;
-      brick.tremble = { t: 0, k: trembleStrength(impact, heavy) };
-      lastTremble = brick.tremble;
+      // 놓은 벽돌이 처음 닿는 순간: 벽돌 하나가 아니라 화면 전체가 살짝 진동(그림만, 물리는 그대로)
       if (!wasCtl) return;
+      const heavy = brick.tint === 'steel' || !!brick.concrete;
+      const k = trembleStrength(impact, heavy);
+      const cur = vib ? vibrationRemaining(vib.t, vib.k) : 0;
+      if (k >= cur) { vib = { t: 0, k }; lastVib = vib; }
       const b = brick.body.bounds;
       dust((b.min.x + b.max.x) / 2, b.max.y, b.max.x - b.min.x);
-      if (brick.body.speed > 4) shake = Math.max(shake, 0.18);
     }
     function onSettled(brick) {
       ctx.sfx.play('step');
@@ -253,7 +254,7 @@ export default {
       gr.addColorStop(0, s.top);
       gr.addColorStop(1, s.bot);
       g.fillStyle = gr;
-      g.fillRect(0, 0, W, H);
+      g.fillRect(-8, -8, W + 16, H + 16); // 화면 진동 때 가장자리가 비지 않도록 여유를 둠
       if (s.night > 0.05) {
         g.globalAlpha = Math.min(1, s.night);
         g.fillStyle = '#fffbe6';
@@ -521,12 +522,8 @@ export default {
       const cell = b.cell;
       const half = (cell - 1) / 2;
       g.save();
-      let tx = 0;
-      let ty = 0;
-      let tr = 0;
-      if (b.tremble) { const o = trembleOffset(b.tremble.t, b.tremble.k); tx = o.dx; ty = o.dy; tr = o.rot; }
-      g.translate(body.position.x + tx, body.position.y + ty);
-      g.rotate(body.angle + tr);
+      g.translate(body.position.x, body.position.y);
+      g.rotate(body.angle);
       if (b.concrete) { drawConcrete(b); if (linked) drawVineOutline(b); g.restore(); return; }
       const magic = b.magic;
       if (magic) {
@@ -839,6 +836,14 @@ export default {
     }
 
     function render() {
+      // 착지 진동: 하늘·벽돌·표시 전부 포함한 게임 화면 전체를 같이 살짝 흔든다
+      g.save();
+      if (vib) { const o = vibrationOffset(vib.t, vib.k); g.translate(o.dx, o.dy); }
+      renderScene();
+      g.restore();
+    }
+
+    function renderScene() {
       drawSky();
       // 설명 배너는 하늘 바로 위, 벽돌보다 아래에 그린다: 막 나타난 벽돌이 배너 뒤로 가려지지 않게
       if (info) { g.save(); const { cssW } = cssScale(); drawInfo(cssW); g.restore(); }
@@ -876,9 +881,7 @@ export default {
       }
       for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].t += dt; if (toasts[i].t > 1.4) toasts.splice(i, 1); }
       if (!ready) return;
-      for (const b of world.bricks) {
-        if (b.tremble) { b.tremble.t += dt; if (b.tremble.t >= TREMBLE.sec) b.tremble = null; }
-      }
+      if (vib) { vib.t += dt; if (vib.t >= VIBRATION.sec) vib = null; }
       const held = ctx.input.held;
       world.step(dt, over ? null : { left: held.left, right: held.right, down: held.down });
       const h = world.heightPx();
@@ -914,7 +917,8 @@ export default {
           get granted() { return granted; },
           get itemUsable() { return itemUsable(); },
           get info() { return info && { ...info }; },
-          get lastTremble() { return lastTremble && { ...lastTremble, ...trembleOffset(lastTremble.t, lastTremble.k) }; },
+          get lastVibration() { return lastVib && { ...lastVib, ...vibrationOffset(lastVib.t, lastVib.k) }; },
+          get vibration() { return vib ? { ...vib, ...vibrationOffset(vib.t, vib.k) } : null; },
           // 검증용: 최고 높이를 직접 넣어 10m 보상 확인
           setMaxHeightM(m) { maxH = Math.max(maxH, m * PX_PER_M); },
           useItem,
