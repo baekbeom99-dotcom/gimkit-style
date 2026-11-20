@@ -117,6 +117,20 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .ui-quiz-title{text-align:center;font-size:16px;color:#cfc8f5}
 .ui-quiz-q{display:flex;align-items:center;justify-content:center;min-height:110px;font-size:48px;font-weight:900;text-align:center;
   background:#fff;color:#1b1340;border-radius:20px;padding:10px;word-break:keep-all}
+.ui-quiz-q.word{flex-direction:column;gap:4px;min-height:130px}
+.ui-q-row{display:flex;align-items:center;justify-content:center;gap:10px;max-width:100%}
+.ui-q-word{font-size:44px;line-height:1.15;word-break:keep-all;overflow-wrap:anywhere;min-width:0}
+.ui-q-cap{font-size:15px;font-weight:700;color:#7a6fb0}
+/* 분수 읽기: 안내 글 + 도형 그림 */
+.ui-quiz-q.figure{flex-direction:column;gap:6px;min-height:0;padding:8px 10px}
+.ui-q-prompt{font-size:17px;color:#4a3a9c}
+.ui-quiz-choices.fig .ui-label{font-size:25px;white-space:nowrap}
+.ui-q-figure{display:flex;align-items:center;justify-content:center;line-height:0}
+.ui-q-figure svg{display:block;width:160px;height:160px;max-width:100%}
+@media (max-height:700px){.ui-q-figure svg{width:128px;height:128px}}
+.ui-speak{flex:none;width:56px;height:56px;border:0;border-radius:16px;background:#ffd23f;color:#1b1340;font-size:28px;
+  box-shadow:0 4px 0 rgba(0,0,0,.3);touch-action:manipulation;font-family:inherit}
+.ui-speak:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.3)}
 .ui-quiz-fb{min-height:32px;text-align:center;font-size:24px;font-weight:800}
 .ui-quiz-fb.ok{color:#7CFC6B}
 .ui-quiz-fb.bad{color:#ffb4c0}
@@ -224,7 +238,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .px-row-ck{flex:none;width:28px;height:28px}
 .px-row-ck .px-icon{width:28px;height:28px}
 .px-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.px-chip{min-height:56px;padding:0 6px;border:0;border-radius:0;background:#3b2d86;color:#fff;font-size:20px;
+.px-chip{min-height:56px;padding:0 6px;white-space:pre-line;line-height:1.15;border:0;border-radius:0;background:#3b2d86;color:#fff;font-size:20px;
   box-shadow:-3px 0 0 0 var(--px-edge),3px 0 0 0 var(--px-edge),0 -3px 0 0 var(--px-edge),0 6px 0 0 var(--px-edge),inset 3px 3px 0 0 #5a47c0,inset -3px -3px 0 0 #2a1f66}
 .px-chip.on{background:var(--px-blu);box-shadow:-3px 0 0 0 var(--px-edge),3px 0 0 0 var(--px-edge),0 -3px 0 0 var(--px-edge),0 3px 0 0 var(--px-edge),inset 3px 3px 0 0 #1368ce,inset -3px -3px 0 0 #8ccbff;transform:translateY(3px)}
 .px-chip.all{grid-column:1/-1}

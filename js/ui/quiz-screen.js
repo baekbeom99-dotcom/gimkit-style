@@ -1,5 +1,8 @@
 // Gimkit-style quiz overlay. showQuiz({session, energy, mode, need, sfx}) -> Promise<void>
 // (mode 'item' -> Promise<boolean>: true = need개 정답 완료, false = ✕로 닫음)
+import { speak, cancelSpeech } from '../core/tts.js';
+import { renderFigure } from './fraction-figure.js';
+
 const SHAPES = ['▲', '◆', '●', '■'];
 const COLORS = ['red', 'blue', 'yellow', 'green'];
 const FEEDBACK_OK_MS = 700;
@@ -44,7 +47,7 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
     const item = mode === 'item' ? createNeedCounter(need) : null;
     if (item) title.textContent = `콘크리트 아이템! 문제 ${item.need}개를 맞혀요`;
 
-    let done = false, locked = false, q = null, timer = 0;
+    let done = false, locked = false, q = null, timer = 0, spoke = false;
 
     const drawGauge = () => {
       fill.style.width = (energy.value / energy.max * 100) + '%';
@@ -68,16 +71,65 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      if (spoke) cancelSpeech();
       off();
       el.remove();
       if (item) resolve(result === true);
       else resolve();
     }
 
+    // 영단어 문제: 큰 단어 + 🔊 다시 듣기 버튼 + 안내 글. 새 문제마다 한 번 자동으로 읽어 준다.
+    function drawWord() {
+      qEl.classList.add('word');
+      const row = document.createElement('div');
+      row.className = 'ui-q-row';
+      const w = document.createElement('span');
+      w.className = 'ui-q-word';
+      w.textContent = q.q;
+      w.style.fontSize = q.q.length > 18 ? '26px' : q.q.length > 11 ? '34px' : '';
+      row.appendChild(w);
+      const text = q.q, lang = q.speak;
+      if (lang) {
+        const sp = document.createElement('button');
+        sp.type = 'button';
+        sp.className = 'ui-speak';
+        sp.setAttribute('aria-label', '다시 듣기');
+        sp.textContent = '🔊';
+        sp.addEventListener('click', () => { if (!done) { spoke = true; speak(text, lang); } });
+        row.appendChild(sp);
+        spoke = true;
+        speak(text, lang);
+      }
+      const cap = document.createElement('div');
+      cap.className = 'ui-q-cap';
+      cap.textContent = '뜻을 골라요';
+      qEl.replaceChildren(row, cap);
+    }
+
+    // 분수 읽기: 안내 글 + 도형 그림(나눈 도형의 일부를 색칠). q.q는 내부 키라서 화면에 쓰지 않는다.
+    function drawFigure() {
+      qEl.classList.remove('word');
+      qEl.classList.add('figure');
+      const cap = document.createElement('div');
+      cap.className = 'ui-q-cap ui-q-prompt';
+      cap.textContent = q.prompt || '색칠한 부분은 전체의 얼마일까요?';
+      const fig = document.createElement('div');
+      fig.className = 'ui-q-figure';
+      renderFigure(fig, q.figure, { size: 160 });
+      qEl.replaceChildren(cap, fig);
+    }
+
+    // 식 문제(구구단·덧셈·뺄셈): '47 + 8' -> '47 + 8 = ?' (이미 '='나 '?'가 있으면 그대로)
+    function equationText(t) { return /[=?]/.test(t) ? t : `${t} = ?`; }
+
     function nextQuestion() {
       if (done) return;
       q = session.next();
-      qEl.textContent = q.q;
+      qEl.classList.remove('figure');
+      choicesEl.classList.toggle('fig', q.kind === 'figure'); // 분수 읽기: 보기를 한 줄로
+      if (q.kind === 'word') drawWord();
+      else if (q.kind === 'figure' && q.figure) drawFigure();
+      else { qEl.classList.remove('word'); qEl.textContent = equationText(q.q); }
       fb.textContent = '';
       fb.className = 'ui-quiz-fb';
       choicesEl.replaceChildren();

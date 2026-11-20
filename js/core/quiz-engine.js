@@ -1,6 +1,7 @@
 // Quiz engine: choices, energy gain, session with streaks.
 export const LOCK_MS = 1000;
 const CHOICE_COUNT = 4;
+const MIN_POOL = 8;
 
 export function energyGain(streak) {
   const mult = streak >= 5 ? 2 : streak >= 3 ? 1.5 : 1;
@@ -56,7 +57,7 @@ function memoryStats() {
   };
 }
 
-export function createQuizSession({ items, units, rng = Math.random, gainMultiplier = 1, stats }) {
+export function createQuizSession({ items, units, rng = Math.random, gainMultiplier = 1, stats, kind = 'equation', speak = null }) {
   stats = stats || memoryStats();
   let source = items;
   if (Array.isArray(units) && units.length) {
@@ -65,6 +66,10 @@ export function createQuizSession({ items, units, rng = Math.random, gainMultipl
     if (filtered.length) source = filtered;
   }
   const pool = [...new Set(source.map((it) => String(it.answer)))];
+  if (pool.length < MIN_POOL) { // 단원이 작으면 세트 전체 정답에서 보기 후보를 보충한다
+    const have = new Set(pool);
+    for (const it of items) { const a = String(it.answer); if (!have.has(a)) { have.add(a); pool.push(a); } }
+  }
   const keyOf = (it) => `${it.unit}|${it.q}`;
   const recent = [];
   const avoid = source.length >= 4 ? 2 : 1;
@@ -88,7 +93,8 @@ export function createQuizSession({ items, units, rng = Math.random, gainMultipl
         removedIndex = others[Math.floor(rng() * others.length)];
       }
       current = { correctIndex, answered: false, key: keyOf(item) };
-      return { q: item.q, choices, correctIndex, removedIndex };
+      // 그림 문제(kind 'figure'): q는 통계용 내부 키이므로 화면에는 figure(그림)와 prompt(안내 글)를 쓴다
+      return { q: item.q, choices, correctIndex, removedIndex, kind, speak, figure: item.figure || null, prompt: item.prompt || null };
     },
     answer(choiceIndex) {
       if (!current || current.answered) {

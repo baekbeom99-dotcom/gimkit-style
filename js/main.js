@@ -69,9 +69,9 @@ async function buildSession(sel, mod) {
   const extra = () => ({ gainMultiplier: (mod && mod.energyGainMultiplier) || 1, stats: createItemStats(sel.setId || 'gugudan') });
   try {
     const { loadSet } = await import('./data/question-sets.js');
-    const set = await loadSet(sel.setId || 'gugudan', { dans: (sel.units || []).map(Number).filter(Number.isFinite) });
+    const set = await loadSet(sel.setId || 'gugudan', { dans: (sel.units || []).map(Number).filter(Number.isFinite), units: sel.units || [] });
     const units = sel.units && sel.units.length ? sel.units.map(String) : undefined;
-    return createQuizSession({ items: set.items, units, rng: Math.random, ...extra() });
+    return createQuizSession({ items: set.items, units, kind: set.kind, speak: set.tts, rng: Math.random, ...extra() });
   } catch (e) {
     console.warn('question set fallback', e);
     const items = [];

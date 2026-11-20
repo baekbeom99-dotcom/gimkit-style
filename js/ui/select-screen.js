@@ -273,7 +273,7 @@ export async function mount(root, props) {
       });
       grid.appendChild(all);
       st.units.forEach((u) => {
-        const c = h('button', 'px-chip', unitLabel(u));
+        const c = h('button', 'px-chip', unitLabel(u).replace(/([^+−])([+−])/, '$1\n$2'));
         c.type = 'button';
         c.addEventListener('click', () => { if (draft.has(u.id)) draft.delete(u.id); else draft.add(u.id); sync(); });
         chips.push([u, c]);

@@ -2,6 +2,9 @@
 // 나머지 세트는 data/questions/<id>.json 을 fetch한다.
 
 import { generateGugudan } from './gugudan.js';
+import { generateAddSub, ADDSUB_INFO } from './addsub.js';
+
+import { generateFractionRead, FRACTION_READ_INFO } from './fraction-read.js';
 
 const GUGUDAN_INFO = { id: 'gugudan', title: '구구단', subject: '수학', grade: '초등' };
 const INDEX_URL = new URL('../../data/questions/index.json', import.meta.url);
@@ -17,7 +20,7 @@ export async function loadIndex() {
   } catch {
     listed = [];
   }
-  const seen = new Set([GUGUDAN_INFO.id]);
+  const seen = new Set([GUGUDAN_INFO.id, ...ADDSUB_INFO.map((i) => i.id), FRACTION_READ_INFO.id]);
   const rest = [];
   for (const entry of listed) {
     if (!entry || typeof entry.id !== 'string' || seen.has(entry.id)) continue;
@@ -29,11 +32,13 @@ export async function loadIndex() {
       grade: String(entry.grade ?? ''),
     });
   }
-  return [GUGUDAN_INFO, ...rest];
+  return [GUGUDAN_INFO, ...ADDSUB_INFO.map((i) => ({ ...i })), { ...FRACTION_READ_INFO }, ...rest];
 }
 
 export async function loadSet(id, opts = {}) {
   if (id === 'gugudan') return generateGugudan(opts.dans ?? []);
+  if (id === 'add' || id === 'sub') return generateAddSub(id, opts);
+  if (id === FRACTION_READ_INFO.id) return generateFractionRead(opts);
   const res = await fetch(SET_URL(id));
   if (!res.ok) throw new Error(`문제 세트를 불러올 수 없습니다: ${id} (HTTP ${res.status})`);
   return res.json();
