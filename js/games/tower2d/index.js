@@ -4,6 +4,7 @@ import { createWorld, GROOVE, PLATFORM_H } from './world.js';
 import {
   SHAPES, createBag, createMagicSchedule, stageLinePx, stageLineM, fallSpeed, EFFECT_LABEL,
   PX_PER_M, cellsSize, trembleStrength, trembleOffset, TREMBLE, concreteGrants, CONCRETE_MAX,
+  MAGIC_INFO, INFO_SEC, splitInfo, infoAlpha,
 } from './logic.js';
 
 const COLORS = {
@@ -88,6 +89,7 @@ export default {
     let ended = false;
     let endTimer = 0;
     let banner = null;
+    let info = null; // 특수 벽돌 설명 배너 { text, tone, t }
     let inventory = 1; // 콘크리트 아이템 보유 수
     let granted = 0; // 10m마다 받은 횟수
     let itemBusy = false;
@@ -103,8 +105,8 @@ export default {
 
     const spawnY = () => camY + Math.round(H * 0.15) + 20;
 
-    function addToast(text, x, y, color = '#ffffff') {
-      toasts.push({ text, x, y, t: 0, color });
+    function addToast(text, x, y, color = '#ffffff', size = 20) {
+      toasts.push({ text, x, y, t: 0, color, size });
       if (toasts.length > 4) toasts.shift();
     }
     function burst(x, y, n, colors, speed = 120, life = 0.7) {
@@ -156,12 +158,19 @@ export default {
       const left = ctx.hearts.lose();
       if (left <= 0) { over = true; endTimer = END_DELAY; }
     }
+    // 설명 배너(화면 위쪽 가운데). 새 배너가 오면 바로 바꾼다(겹쳐 보이지 않게)
+    function showInfo(kind, tone) {
+      const text = MAGIC_INFO[kind];
+      if (text) info = { text, tone, t: 0 };
+    }
     function onMagic(brick, effect) {
       ctx.sfx.play('magic');
       const p = brick.body.position;
       const light = !brick.magic || brick.magic.kind === 'light';
       burst(p.x, p.y, 14, light ? ['#ffe066', '#ffffff', '#ffb703'] : ['#b06bff', '#3b1460', '#e0c3ff'], 130, 0.7);
-      addToast(EFFECT_LABEL[effect] || effect, Math.min(W - 60, Math.max(60, p.x)), p.y - 40, light ? '#fff3b0' : '#e5ccff');
+      // 어두운 마법은 나타날 때 적용되어 설명 배너가 이미 떠 있으므로 토스트를 띄우지 않는다.
+      // 밝은 마법은 안착할 때 적용: 탑 꼭대기 근처에 작은 확인 토스트만(배너와 위치가 겹치지 않음)
+      if (light) addToast(EFFECT_LABEL[effect] || effect, Math.min(W - 60, Math.max(60, p.x)), p.y - 34, '#fff3b0', 16);
     }
 
     async function trySpawn() {
@@ -180,7 +189,10 @@ export default {
     function doSpawn(shape, magic) {
       world.setFallSpeed(fallSpeed(spawned, stage));
       spawned++;
-      return world.spawn(shape, magic, { x: W / 2, y: spawnY() });
+      const b = world.spawn(shape, magic, { x: W / 2, y: spawnY() });
+      // 마법 종류는 나타날 때 정해지므로(효과 적용은 밝은 마법이면 안착 때) 지금 설명을 띄운다
+      if (magic) showInfo(magic.effect, magic.kind);
+      return b;
     }
 
     // 콘크리트 아이템: 버튼 -> 문제 3개(item 모드) -> 조종 중인 벽돌을 콘크리트로
@@ -208,7 +220,7 @@ export default {
       ctx.sfx.play('magic');
       const p = target.body.position;
       burst(p.x, p.y, 16, ['#4b4e53', '#9aa0a6', '#ffffff'], 120, 0.7);
-      addToast('🧱 콘크리트 적용!', Math.min(W - 80, Math.max(80, p.x)), p.y - 40, '#e9ecef');
+      showInfo('concrete', 'concrete');
       return true;
     }
     function checkGrants() {
@@ -402,7 +414,107 @@ export default {
       for (const [x, y] of local) g.rect(x - s / 2, y - s / 2, s, s);
     }
 
-    function drawBrick(b) {
+    // 모양 전체의 바깥 테두리 선분(지역 좌표). 칸 사이 안쪽 경계는 빼고, 벽돌마다 한 번만 계산해 둔다
+    function outerEdges(b) {
+      if (b._edges) return b._edges;
+      const set = new Set(b.cells.map(([x, y]) => x + ',' + y));
+      const e = (b.cell - 1) / 2;
+      const t = b.cell / 2;
+      const out = [];
+      b.cells.forEach(([cx, cy], i) => {
+        const [x, y] = b.local[i];
+        if (!set.has(cx + ',' + (cy - 1))) out.push([x - t, y - e, x + t, y - e]);
+        if (!set.has(cx + ',' + (cy + 1))) out.push([x - t, y + e, x + t, y + e]);
+        if (!set.has((cx - 1) + ',' + cy)) out.push([x - e, y - t, x - e, y + t]);
+        if (!set.has((cx + 1) + ',' + cy)) out.push([x + e, y - t, x + e, y + t]);
+      });
+      b._edges = out;
+      return out;
+    }
+    function edgesPath(b) {
+      g.beginPath();
+      for (const [x1, y1, x2, y2] of outerEdges(b)) { g.moveTo(x1, y1); g.lineTo(x2, y2); }
+    }
+    // 덩굴로 이어진 벽돌: 옅은 초록 테두리 + 부드러운 바깥 빛(넓고 옅은 선 두 번, shadowBlur 없이)
+    function drawVineOutline(b) {
+      g.lineCap = 'round';
+      edgesPath(b);
+      g.strokeStyle = 'rgba(150,230,150,0.18)';
+      g.lineWidth = 9;
+      g.stroke();
+      g.strokeStyle = 'rgba(150,230,150,0.35)';
+      g.lineWidth = 5;
+      g.stroke();
+      g.strokeStyle = 'rgba(150,230,150,0.9)';
+      g.lineWidth = 2;
+      g.stroke();
+    }
+
+    // 단단(heavy): 검은 쇠덩이. 칸마다 세로 그라데이션 + 왼쪽 위 반사광 + 안쪽 베벨 + 리벳 + 결정적 가로 긁힘 + 푸른 테두리 빛
+    function drawIron(b) {
+      const cell = b.cell;
+      const s = cell - 1;
+      const half = s / 2;
+      for (const [x, y] of b.local) {
+        const gr = g.createLinearGradient(0, y - half, 0, y + half);
+        gr.addColorStop(0, '#4a5260');
+        gr.addColorStop(0.16, '#2b3038');
+        gr.addColorStop(0.55, '#1b1d21');
+        gr.addColorStop(1, '#0a0b0d');
+        g.fillStyle = gr;
+        g.fillRect(x - half, y - half, s, s);
+      }
+      // 솔질한 가로 긁힘(옅은 금속 결)
+      g.strokeStyle = 'rgba(150,170,200,0.16)';
+      g.lineWidth = 0.7;
+      g.beginPath();
+      b.local.forEach(([x, y], i) => {
+        for (let k = 0; k < 5; k++) {
+          const yy = y - half + 4 + hash(b.id * 13 + i, k) * (s - 8);
+          const x0 = x - half + 2 + hash(b.id + i * 7, k + 3) * (s * 0.4);
+          const len = s * (0.3 + 0.5 * hash(i * 5 + k, b.id));
+          g.moveTo(x0, yy);
+          g.lineTo(Math.min(x + half - 2, x0 + len), yy);
+        }
+      });
+      g.stroke();
+      // 안쪽 베벨(어두운 홈)
+      g.strokeStyle = 'rgba(0,0,0,0.55)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      for (const [x, y] of b.local) g.rect(x - half + 3.5, y - half + 3.5, s - 7, s - 7);
+      g.stroke();
+      // 왼쪽 위 밝은 반사광 선
+      g.strokeStyle = 'rgba(214,226,245,0.85)';
+      g.lineWidth = 1.4;
+      g.beginPath();
+      for (const [x, y] of b.local) {
+        g.moveTo(x - half + 1.5, y + half - 4);
+        g.lineTo(x - half + 1.5, y - half + 1.5);
+        g.lineTo(x + half - 4, y - half + 1.5);
+      }
+      g.stroke();
+      // 리벳: 어두운 점 + 작은 하이라이트
+      g.fillStyle = '#07080a';
+      g.beginPath();
+      for (const [x, y] of b.local) for (const [ox, oy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.rect(x + ox * (half - 6) - 1.5, y + oy * (half - 6) - 1.5, 3, 3);
+      g.fill();
+      g.fillStyle = '#8f9bb0';
+      g.beginPath();
+      for (const [x, y] of b.local) for (const [ox, oy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.rect(x + ox * (half - 6) - 1.5, y + oy * (half - 6) - 1.5, 1.2, 1.2);
+      g.fill();
+      // 윤곽: 칸 사이 짙은 선 + 바깥 테두리에 옅은 푸른빛
+      g.strokeStyle = '#050608';
+      g.lineWidth = 2;
+      cellsPath(b.local, cell, 0);
+      g.stroke();
+      g.strokeStyle = 'rgba(110,145,205,0.5)';
+      g.lineWidth = 1;
+      edgesPath(b);
+      g.stroke();
+    }
+
+    function drawBrick(b, linked) {
       const body = b.body;
       const bb = body.bounds;
       if (bb.max.y < camY - 10 || bb.min.y > camY + H + 10) return;
@@ -415,7 +527,7 @@ export default {
       if (b.tremble) { const o = trembleOffset(b.tremble.t, b.tremble.k); tx = o.dx; ty = o.dy; tr = o.rot; }
       g.translate(body.position.x + tx, body.position.y + ty);
       g.rotate(body.angle + tr);
-      if (b.concrete) { drawConcrete(b); g.restore(); return; }
+      if (b.concrete) { drawConcrete(b); if (linked) drawVineOutline(b); g.restore(); return; }
       const magic = b.magic;
       if (magic) {
         const pulse = 0.5 + 0.5 * Math.sin(time * 6);
@@ -430,9 +542,14 @@ export default {
         cellsPath(b.local, cell, 0);
         g.stroke();
       }
+      if (b.tint === 'steel') {
+        drawIron(b);
+        if (linked) drawVineOutline(b);
+        g.restore();
+        return;
+      }
       let fill = COLORS[b.shape] || '#ccc';
-      if (b.tint === 'steel') fill = '#7f8ea3';
-      else if (b.tint === 'ice') fill = '#c8f0ff';
+      if (b.tint === 'ice') fill = '#c8f0ff';
       g.fillStyle = fill;
       cellsPath(b.local, cell, 0);
       g.fill();
@@ -445,16 +562,11 @@ export default {
       g.beginPath();
       for (const [x, y] of b.local) { g.rect(x - half + 3, y - half + 3, cell - 9, 4); g.rect(x - half + 3, y - half + 7, 4, 5); }
       g.fill();
-      if (b.tint === 'steel') { // 리벳
-        g.fillStyle = '#c9d3df';
-        g.beginPath();
-        for (const [x, y] of b.local) g.rect(x - 2, y - 2, 4, 4);
-        g.fill();
-      }
       g.strokeStyle = magic && magic.kind === 'dark' ? '#1a0b2e' : OUTLINE;
       g.lineWidth = 2;
       cellsPath(b.local, cell, 0);
       g.stroke();
+      if (linked) drawVineOutline(b);
       g.restore();
     }
 
@@ -566,10 +678,10 @@ export default {
       g.globalAlpha = 1;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.font = '900 20px sans-serif';
       g.lineWidth = 4;
       g.strokeStyle = 'rgba(27,19,64,0.85)';
       for (const t of toasts) {
+        g.font = `900 ${t.size || 20}px sans-serif`;
         g.globalAlpha = Math.max(0, Math.min(1, (1.4 - t.t) / 0.4));
         const y = t.y - t.t * 30;
         g.strokeText(t.text, t.x, y);
@@ -679,8 +791,57 @@ export default {
       g.restore();
     }
 
+    // 특수 벽돌 설명: NEXT/기록 상자 아래 가운데, 어두운 알약 + 색 테두리(밝은=금색, 어두운=보라)
+    const INFO_TONE = {
+      light: { border: '#ffd23f', title: '#ffe98a' },
+      dark: { border: '#b06bff', title: '#e5ccff' },
+      concrete: { border: '#adb5bd', title: '#f1f3f5' },
+    };
+    function drawInfo(cssW) {
+      const a = infoAlpha(info.t);
+      if (a <= 0) return;
+      const tone = INFO_TONE[info.tone] || INFO_TONE.light;
+      g.globalAlpha = a;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      const fT = '900 16px sans-serif';
+      const fD = 'bold 15px sans-serif';
+      const maxW = cssW - 24;
+      // 한 줄에 들어가면 한 줄, 아니면 '제목 / 설명' 두 줄
+      g.font = fD;
+      const one = g.measureText(info.text).width + 32 <= maxW;
+      const lines = one ? [info.text] : splitInfo(info.text);
+      let w = 0;
+      lines.forEach((l, i) => { g.font = i === 0 && !one ? fT : fD; w = Math.max(w, g.measureText(l).width); });
+      const bw = Math.min(maxW, w + 32);
+      const bh = lines.length === 1 ? 36 : 54;
+      // 스테이지 배너(150~196)가 떠 있으면 그 아래로
+      const y0 = (banner ? 204 : 132) - 8 * (1 - Math.min(1, info.t / 0.25));
+      g.fillStyle = 'rgba(20,14,48,0.92)';
+      g.strokeStyle = tone.border;
+      g.lineWidth = 2.5;
+      rr(g, cssW / 2 - bw / 2, y0, bw, bh, 16);
+      g.fill();
+      g.stroke();
+      if (one) {
+        g.font = fD;
+        g.fillStyle = '#ffffff';
+        g.fillText(lines[0], cssW / 2, y0 + bh / 2 + 1, maxW - 16);
+      } else {
+        g.font = fT;
+        g.fillStyle = tone.title;
+        g.fillText(lines[0], cssW / 2, y0 + 17, maxW - 16);
+        g.font = fD;
+        g.fillStyle = '#ffffff';
+        g.fillText(lines[1], cssW / 2, y0 + 38, maxW - 16);
+      }
+      g.globalAlpha = 1;
+    }
+
     function render() {
       drawSky();
+      // 설명 배너는 하늘 바로 위, 벽돌보다 아래에 그린다: 막 나타난 벽돌이 배너 뒤로 가려지지 않게
+      if (info) { g.save(); const { cssW } = cssScale(); drawInfo(cssW); g.restore(); }
       g.save();
       let ox = 0;
       let oy = 0;
@@ -690,7 +851,9 @@ export default {
       if (ready) {
         drawFinishLine();
         if (world.controlled) drawGuide(world.controlled);
-        for (const b of world.bricks) drawBrick(b);
+        const linked = new Set();
+        for (const v of world.vines) { linked.add(v.a); linked.add(v.b); }
+        for (const b of world.bricks) drawBrick(b, linked.has(b));
         drawVines();
       }
       drawParticles();
@@ -702,6 +865,7 @@ export default {
       time += dt;
       if (shake > 0) shake = Math.max(0, shake - dt);
       if (banner) { banner.t += dt; if (banner.t >= BANNER_SEC) banner = null; }
+      if (info) { info.t += dt; if (info.t >= INFO_SEC) info = null; }
       for (let i = parts.length - 1; i >= 0; i--) {
         const q = parts[i];
         q.life -= dt;
@@ -749,6 +913,7 @@ export default {
           get inventory() { return inventory; },
           get granted() { return granted; },
           get itemUsable() { return itemUsable(); },
+          get info() { return info && { ...info }; },
           get lastTremble() { return lastTremble && { ...lastTremble, ...trembleOffset(lastTremble.t, lastTremble.k) }; },
           // 검증용: 최고 높이를 직접 넣어 10m 보상 확인
           setMaxHeightM(m) { maxH = Math.max(maxH, m * PX_PER_M); },

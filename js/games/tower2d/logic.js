@@ -83,6 +83,27 @@ export const EFFECT_LABEL = {
   heavy: '✨ 단단!', vine: '🌿 덩굴!', undo: '↩ 되돌리기!', ice: '🧊 얼음!', giant: '🦣 거대!',
 };
 
+// 특수 벽돌이 나타날 때(조종 시작) 화면 위쪽에 잠깐 띄우는 설명. '제목 — 설명' 형식(좁으면 두 줄로 나눔)
+export const MAGIC_INFO = {
+  heavy: '⚙ 단단 벽돌 — 아주 무겁고 잘 안 밀려요',
+  vine: '🌿 덩굴 벽돌 — 닿은 벽돌과 엮여서 함께 움직여요',
+  undo: '↩ 되돌리기 벽돌 — 놓으면 직전 벽돌이 사라져요',
+  ice: '🧊 얼음 벽돌 — 미끄러우니 조심하세요',
+  giant: '🦣 거대 벽돌 — 크기가 1.5배예요',
+  concrete: '🧱 콘크리트 — 놓으면 그 자리에 고정돼요',
+};
+export const INFO_SEC = 2.2; // 설명 배너 표시 시간(페이드 인/아웃 포함)
+// 배너 줄 나누기: ' — ' 앞은 제목, 뒤는 설명
+export function splitInfo(text) {
+  const i = text.indexOf(' — ');
+  return i < 0 ? [text] : [text.slice(0, i), text.slice(i + 3)];
+}
+// t초에서 배너 불투명도(0.25초 페이드 인, 0.4초 페이드 아웃)
+export function infoAlpha(t, sec = INFO_SEC) {
+  if (!(t >= 0) || t >= sec) return 0;
+  return Math.max(0, Math.min(1, t / 0.25, (sec - t) / 0.4));
+}
+
 function randInt(rng, a, b) { return a + Math.floor(rng() * (b - a + 1)); }
 
 // 마법 일정: 밝은 마법 4~6개 간격, 어두운 마법은 스테이지 3부터 7~9개 간격.

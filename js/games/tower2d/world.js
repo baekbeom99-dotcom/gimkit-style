@@ -34,6 +34,32 @@ export const GROOVE = {
   chamfer: 0,
 };
 export const PLATFORM_H = GROOVE.depth + GROOVE.base; // 56: 받침대 전체 두께(윗면 = platformTop)
+
+// 벽돌끼리 "아주 살짝" 잡아주는 보조(눈에 보이는 효과 없음). 모든 손잡이는 여기 한 곳에.
+// 면이 거의 평행(90° 단위로 접은 각도 차 ≤ angleSnapDeg)하고, 공유 면이 짧은 쪽 면의 minOverlap 이상
+// 겹치고, 틈이 range 이하인 짝에만 작용한다. 속도를 아주 조금씩만 바꾸고(힘을 쓰지 않음: Matter는 힘이
+// 걸린 바디를 재우지 않는다) 모두 상한이 있어서 들어 올리거나 순간이동시키거나 에너지를 키우지 못한다.
+export const ASSIST = {
+  enabled: true,
+  range: 3, // px: 이 틈 이내의 면만
+  maxPen: 2, // px: 이만큼 파고든 면도 '닿음'으로 본다
+  force: 0.12, // 당김 = 벽돌 무게의 12% (가속 120 px/s²), 벽돌당 합계도 이 값이 상한
+  maxApproach: 30, // px/s: 이웃 쪽으로 이미 이 속도 이상이면 더 당기지 않음
+  angleSnapDeg: 5, // 이 각도 이내일 때만(일부러 기울인 벽돌은 건드리지 않음)
+  angleRate: 2, // 1/s: 목표 회전 속도 = 어긋난 각도 × 이 값(5°면 0.17 rad/s)
+  angleTorque: 0.6, // rad/s²: 각도 맞추기 각가속도 상한(아주 약함)
+  maxAngSpeed: 0.2, // rad/s: 각도 맞추기 회전 속도 상한
+  slideDamp: 0.9, // 1/s: 닿아 있는 면을 따라 미끄러지는 상대 속도를 1/60초마다 약 1.5%씩 줄임
+  minOverlap: 0.5, // 짧은 쪽 면 길이 대비 겹침 비율
+  holdSec: 1.5, // 안착 뒤 이 시간까지만(그 뒤엔 잠들게 둔다)
+  maxActive: 6, // 한 번에 보조를 받는 최근 벽돌 수(큰 탑에서도 O(n²) 아님)
+};
+const QUARTER = Math.PI / 2;
+// 각도 차를 가장 가까운 90° 단위로 접기: { d: [-45°, 45°], k: 90° 몇 번 }
+export function foldAngle(d) {
+  const k = Math.round(d / QUARTER);
+  return { d: d - k * QUARTER, k };
+}
 // 받침대 윗면 기준 x 범위 목록: { x0, x1, groove }
 export function grooveLayout(cx, width = 160, segs = GROOVE.segments) {
   const total = segs.reduce((a, b) => a + b, 0);
@@ -45,6 +71,7 @@ export function grooveLayout(cx, width = 160, segs = GROOVE.segments) {
 export function createWorld(Matter, opts = {}) {
   const { Engine, Bodies, Body, Composite, Events, Query, Constraint } = Matter;
   const P = { ...PHYS, ...(opts.phys || {}) };
+  const A = { ...ASSIST, ...(opts.assist || {}) };
   const W = opts.width ?? 360;
   const platformTop = opts.platformTop ?? 0;
   const platformW = opts.platformW ?? 160;
@@ -306,6 +333,180 @@ export function createWorld(Matter, opts = {}) {
     for (const b of bricks) if (b !== brick && b.body.isSleeping) Matter.Sleeping.set(b.body, false);
   }
 
+  // ---------- 살짝 잡아주기(ASSIST) ----------
+  // 받침대 칸(직사각형, 회전 없음). 벽돌 칸은 매번 parts에서 읽는다.
+  const platformRects = platform.parts.slice(1).map((p) => ({
+    x: (p.bounds.min.x + p.bounds.max.x) / 2, y: (p.bounds.min.y + p.bounds.max.y) / 2,
+    hx: (p.bounds.max.x - p.bounds.min.x) / 2, hy: (p.bounds.max.y - p.bounds.min.y) / 2,
+  }));
+  const platformNb = { brick: null, body: platform, angle: 0, rects: platformRects };
+  function nbOf(b) {
+    const h = (b.cell - 1) / 2;
+    return { brick: b, body: b.body, angle: b.body.angle, rects: b.body.parts.slice(1).map((p) => ({ x: p.position.x, y: p.position.y, hx: h, hy: h })) };
+  }
+  function assistable(b) {
+    return !!b && !b.lost && b.state !== 'controlled' && b.tint !== 'ice' && !b.concrete && !b.fixed && !b.body.isStatic;
+  }
+  // 벽돌 a와 이웃 nb 사이의 마주 보는 면 목록. 각 면: { nx, ny (월드, a -> 이웃), gap, ratio, dAng }
+  function faceContacts(a, nb) {
+    const ang = a.body.angle;
+    const { d, k } = foldAngle(nb.angle - ang);
+    if (Math.abs(d) > (A.angleSnapDeg * Math.PI) / 180) return [];
+    const c = Math.cos(ang);
+    const s = Math.sin(ang);
+    const px = a.body.position.x;
+    const py = a.body.position.y;
+    const hA = (a.cell - 1) / 2;
+    const swap = (k & 1) !== 0;
+    // 이웃 칸을 a의 지역 좌표로(각도 차 ≤ 5°라 축 정렬로 근사)
+    const nr = nb.rects.map((r) => {
+      const dx = r.x - px;
+      const dy = r.y - py;
+      return { x: dx * c + dy * s, y: -dx * s + dy * c, hx: swap ? r.hy : r.hx, hy: swap ? r.hx : r.hy };
+    });
+    const faces = new Map();
+    // 살짝 기운 면은 끝으로 갈수록 틈이 벌어지므로 칸 짝마다 조금 더 넉넉히 보고, 면 전체의 최소 틈은 range 이하여야 한다
+    const win = A.range + Math.abs(Math.sin(d)) * 4 * hA;
+    for (const [ax, ay] of a.local) {
+      for (const r of nr) {
+        const dx = r.x - ax;
+        const dy = r.y - ay;
+        const ox = hA + r.hx - Math.abs(dx); // x 방향 겹침(>0이면 가로로 겹침)
+        const oy = hA + r.hy - Math.abs(dy);
+        const gapY = -oy;
+        const gapX = -ox;
+        let axis;
+        if (ox > 0.5 && gapY <= win && gapY >= -A.maxPen && gapY >= gapX) axis = 'y';
+        else if (oy > 0.5 && gapX <= win && gapX >= -A.maxPen && gapX > gapY) axis = 'x';
+        else continue;
+        const sign = (axis === 'y' ? dy : dx) >= 0 ? 1 : -1;
+        const line = (axis === 'y' ? ay : ax) + sign * hA;
+        const key = axis + sign + ':' + Math.round(line / 4);
+        let f = faces.get(key);
+        if (!f) { f = { axis, sign, line, ov: 0, gap: Infinity }; faces.set(key, f); }
+        const t = axis === 'y' ? ox : oy;
+        const tMax = 2 * Math.min(hA, axis === 'y' ? r.hx : r.hy);
+        f.ov += Math.min(t, tMax);
+        f.gap = Math.min(f.gap, axis === 'y' ? gapY : gapX);
+      }
+    }
+    const out = [];
+    for (const f of faces.values()) {
+      const y = f.axis === 'y';
+      let faceA = 0;
+      for (const [ax, ay] of a.local) if (Math.abs((y ? ay : ax) + f.sign * hA - f.line) < 1) faceA += 2 * hA;
+      let faceN = 0;
+      for (const r of nr) {
+        const e = (y ? r.y - f.sign * r.hy : r.x - f.sign * r.hx) - f.line;
+        if (Math.abs(e) <= win + A.maxPen) faceN += 2 * (y ? r.hx : r.hy);
+      }
+      const ratio = f.ov / Math.max(1e-6, Math.min(faceA, faceN));
+      if (ratio < A.minOverlap || f.gap > A.range) continue;
+      const lx = y ? 0 : f.sign;
+      const ly = y ? f.sign : 0;
+      out.push({ nx: c * lx - s * ly, ny: s * lx + c * ly, gap: f.gap, ratio, dAng: d });
+    }
+    return out;
+  }
+  function neighbours(a) {
+    const bb = a.body.bounds;
+    const m = A.range + 1;
+    const out = [];
+    const hit = (o) => !(o.max.x < bb.min.x - m || o.min.x > bb.max.x + m || o.max.y < bb.min.y - m || o.min.y > bb.max.y + m);
+    if (hit(platform.bounds)) out.push(platformNb);
+    for (const b of bricks) {
+      if (b === a || b.lost || b.state === 'controlled') continue;
+      if (b.tint === 'ice') continue; // 얼음과의 짝은 보조하지 않는다(미끄러움 유지)
+      if (hit(b.body.bounds)) out.push(nbOf(b));
+    }
+    return out;
+  }
+  // 이번 하위 단계에서 보조를 받을 최근 벽돌들(뒤에서부터 maxActive개까지)
+  function assistCandidates() {
+    const out = [];
+    const holdTicks = A.holdSec / P.tick;
+    for (let i = bricks.length - 1; i >= 0 && out.length < A.maxActive; i--) {
+      const b = bricks[i];
+      if (!assistable(b) || b.body.isSleeping) continue;
+      if (b.state === 'settled' && ticks - (b.settledTick ?? ticks) > holdTicks) continue;
+      out.push(b);
+    }
+    return out;
+  }
+  const assistStats = { pulls: 0, turns: 0, damps: 0 };
+  function applyAssist(hSec) {
+    const aPull = A.force * P.gravityY * P.gravityScale * 1e6; // px/s² (무게 가속도의 force 배)
+    const angSnap = (A.angleSnapDeg * Math.PI) / 180;
+    for (const a of assistCandidates()) {
+      const body = a.body;
+      const v0 = Matter.Body.getVelocity(body);
+      let vx = v0.x * 60; // px/s
+      let vy = v0.y * 60;
+      let sx = 0;
+      let sy = 0;
+      let best = null;
+      let slideX = 0;
+      let slideY = 0;
+      for (const nb of neighbours(a)) {
+        const fs = faceContacts(a, nb);
+        if (!fs.length) continue;
+        let nvx = 0;
+        let nvy = 0;
+        if (nb.brick && !nb.body.isStatic && !nb.body.isSleeping) { const v = Matter.Body.getVelocity(nb.body); nvx = v.x * 60; nvy = v.y * 60; }
+        for (const f of fs) {
+          // (1) 당김: 위로는 절대 당기지 않음, 이미 다가가는 중이면 더하지 않음
+          const rel = (vx - nvx) * f.nx + (vy - nvy) * f.ny;
+          if (f.ny >= -0.5 && rel < A.maxApproach) { sx += f.nx; sy += f.ny; }
+          // 각도 기준: 받치고 있는 아래 면을 먼저, 그다음 겹침이 큰 면
+          f.score = f.ratio + (f.ny > 0.5 ? 1 : 0);
+          if (!best || f.score > best.score) best = f;
+          // (3) 닿아 있으면 면을 따라 미끄러지는 상대 속도를 살짝 줄임
+          if (f.gap <= 0.5) {
+            const tx = -f.ny;
+            const ty = f.nx;
+            const vt = (vx - nvx) * tx + (vy - nvy) * ty;
+            slideX -= vt * tx;
+            slideY -= vt * ty;
+          }
+        }
+      }
+      if (!best) continue;
+      let changed = false;
+      const mag = Math.hypot(sx, sy);
+      if (mag > 1e-6) {
+        const k = (aPull * hSec * Math.min(1, mag)) / mag; // 벽돌당 합계 상한 = force × 무게
+        vx += sx * k;
+        vy += sy * k;
+        assistStats.pulls++;
+        changed = true;
+      }
+      if (slideX || slideY) {
+        const k = Math.min(1, A.slideDamp * hSec);
+        vx += slideX * k;
+        vy += slideY * k;
+        assistStats.damps++;
+        changed = true;
+      }
+      if (changed) Matter.Body.setVelocity(body, { x: vx / 60, y: vy / 60 });
+      // (2) 각도 맞추기: 5° 이내일 때만, 아주 약하게, 회전 속도 상한
+      //     목표 회전 속도 = 어긋난 각도 × angleRate(상한 maxAngSpeed), 각가속도는 angleTorque 이하
+      if (Math.abs(best.dAng) > 1e-4 && Math.abs(best.dAng) <= angSnap) {
+        const w = Matter.Body.getAngularVelocity(body) * 60; // rad/s
+        const target = Math.max(-A.maxAngSpeed, Math.min(A.maxAngSpeed, best.dAng * A.angleRate));
+        const step = A.angleTorque * hSec;
+        const nw = w < target ? Math.min(target, w + step) : Math.max(target, w - step);
+        if (nw !== w) { Matter.Body.setAngularVelocity(body, nw / 60); assistStats.turns++; }
+      }
+    }
+  }
+  // 검증용: 벽돌 b가 지금 받는 보조 면 목록
+  function assistInfo(b) {
+    if (!b || b.lost) return [];
+    const out = [];
+    for (const nb of neighbours(b)) for (const f of faceContacts(b, nb)) out.push({ other: nb.brick ? nb.brick.id : 'platform', ...f });
+    return out;
+  }
+
   function tick(input) {
     const h = (1000 * P.tick) / P.substeps;
     const c = controlled;
@@ -323,6 +524,7 @@ export function createWorld(Matter, opts = {}) {
         Body.setVelocity(controlled.body, { x: vx / 60, y: vy / 60 });
         Body.setAngularVelocity(controlled.body, 0);
       }
+      if (A.enabled) applyAssist(h / 1000);
       Engine.update(engine, h);
       if (controlled) clampX(controlled);
     }
@@ -333,6 +535,7 @@ export function createWorld(Matter, opts = {}) {
       if (b.state === 'falling') {
         if (settleStep(b.settle, b.body.speed, b.body.angularSpeed, P.tick)) {
           b.state = 'settled';
+          b.settledTick = ticks;
           placed.push(b);
           if (b.concrete) fixInPlace(b);
           cb.onSettled && cb.onSettled(b);
@@ -370,5 +573,7 @@ export function createWorld(Matter, opts = {}) {
     get ticks() { return ticks; },
     spawn, place, rotate, release, step, tick, setFallSpeed, removeBrick, applyLight, makeConcrete,
     settledTop, heightPx, busy, overlapDepth,
+    assist: A, assistInfo,
+    get assistStats() { return assistStats; },
   };
 }
