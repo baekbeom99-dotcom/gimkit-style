@@ -5,6 +5,7 @@ import { createRouter } from './core/router.js';
 import { createInput } from './core/input.js';
 import { createSfx } from './core/audio.js';
 import { registry } from './games/registry.js';
+import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr } from './core/layout.js';
 
 const W = 360, MAX_HEARTS = 3;
 let H = 640; // 논리 높이. fullscreen 게임은 화면 비율에 맞춰 늘어남(폭 360 고정)
@@ -12,22 +13,59 @@ let H = 640; // 논리 높이. fullscreen 게임은 화면 비율에 맞춰 늘�
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
 const g2d = canvas.getContext('2d');
-const dpr = Math.min(window.devicePixelRatio || 1, 3);
+let dpr = canvasDpr(window.devicePixelRatio);
 canvas.width = W * dpr;
 canvas.height = H * dpr;
 
+// 화면 크기 -> CSS 변수(--app-w 기둥 폭, --ui-scale 글자/버튼 배율). 기둥 폭 자체는 CSS가 정한다.
+function applyLayoutVars() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = $('app').getBoundingClientRect().width || appWidth(vw, vh);
+  const root = document.documentElement.style;
+  root.setProperty('--app-w', Math.round(w) + 'px');
+  root.setProperty('--ui-scale', String(uiScale(w)));
+  document.body.classList.toggle('landscape-phone', isLandscapePhone(vw, vh));
+}
+
+// 캔버스 해상도를 devicePixelRatio에 맞춘다(바뀌었을 때만: 캔버스를 비우므로). 바뀌면 true.
+function syncBacking() {
+  const d = canvasDpr(window.devicePixelRatio);
+  if (d === dpr && canvas.width === Math.round(W * d) && canvas.height === Math.round(H * d)) return false;
+  dpr = d;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  return true;
+}
+
+// fullscreen 캔버스를 무대에 맞춘다: 비율이 같으면 꽉 채우고, 다르면(게임 중 회전/창 크기 변경) 늘리지 않고 가운데 맞춤.
+function placeCanvas() {
+  const full = $('app').classList.contains('full');
+  const r = $('stage').getBoundingClientRect();
+  const fit = full ? canvasFit(r.width, r.height, W, H) : { mode: 'none' };
+  canvas.classList.toggle('fill', fit.mode === 'fill');
+  canvas.classList.toggle('contain', fit.mode === 'contain');
+  canvas.style.width = fit.mode === 'contain' ? fit.width + 'px' : '';
+  canvas.style.height = fit.mode === 'contain' ? fit.height + 'px' : '';
+}
+
 // fullscreen 게임: 캔버스를 화면 전체에 채우고(HUD는 위에 겹침) 논리 높이를 화면 비율에 맞춘다.
+// 논리 높이는 게임 시작 때 한 번만 정한다(게임이 ctx.height를 기억하므로). 이후 크기 변화는 placeCanvas가 처리.
 function fitCanvas(full) {
   $('app').classList.toggle('full', !!full);
   canvas.classList.toggle('fill', !!full);
   let h = 640;
   if (full) {
     const r = $('stage').getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) h = Math.min(1000, Math.max(520, Math.round(W * r.height / r.width)));
+    if (isLandscapePhone(window.innerWidth, window.innerHeight)) { // 가로 휴대폰: 세로로 돌렸을 때 기준
+      const p = portraitStage(window.innerWidth, window.innerHeight);
+      h = logicalHeight(p.w, p.h, W);
+    } else h = logicalHeight(r.width, r.height, W);
   }
   H = h;
+  dpr = canvasDpr(window.devicePixelRatio);
   canvas.width = W * dpr;
   canvas.height = H * dpr;
+  placeCanvas();
 }
 
 // Optional UI modules (Task 5). Missing modules => fallbacks so the shell works alone.
@@ -194,7 +232,7 @@ async function startGame(sel) {
   const frame = (now) => {
     if (state.ended) return;
     state.raf = requestAnimationFrame(frame);
-    if (state.paused) { state.last = 0; return; }
+    if (state.paused || state.blocked) { state.last = 0; return; } // blocked: 가로 휴대폰 '돌려 주세요' 안내 중
     const dt = state.last ? Math.min((now - state.last) / 1000, 0.05) : 0;
     state.last = now;
     g2d.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -204,7 +242,46 @@ async function startGame(sel) {
     } catch (e) { console.error(e); }
   };
   state.raf = requestAnimationFrame(frame);
+  updateRotate();
 }
+
+// ---- screen size / orientation ----
+// 가로 휴대폰에서 게임(퀴즈·리뷰 포함) 중이면 '세로로 돌려 주세요' 안내를 덮고 게임 루프를 멈춘다(상태는 그대로).
+let rotateEl = null;
+function updateRotate() {
+  const on = !!active && !active.ended && isLandscapePhone(window.innerWidth, window.innerHeight);
+  if (on && !rotateEl) {
+    rotateEl = document.createElement('div');
+    rotateEl.className = 'rotate-overlay';
+    rotateEl.setAttribute('role', 'alertdialog');
+    rotateEl.innerHTML = '<div class="rotate-phone" aria-hidden="true"><i></i></div>'
+      + '<div class="rotate-title">📱 화면을 세로로 돌려 주세요</div><div class="rotate-sub">세로 화면에서 게임을 이어서 할 수 있어요</div>';
+    document.body.appendChild(rotateEl);
+  }
+  if (rotateEl) rotateEl.hidden = !on;
+  if (active) {
+    active.blocked = on;
+    if (!on) active.last = 0;
+  }
+}
+
+function onResize() {
+  applyLayoutVars();
+  const st = active;
+  if (st && !st.ended) {
+    placeCanvas();
+    if (syncBacking() && st.game && (st.paused || st.blocked || st.reviewing)) { // 멈춘 동안 비워진 캔버스를 한 번 다시 그림
+      try { g2d.setTransform(dpr, 0, 0, dpr, 0, 0); st.game.render(); } catch (e) { console.error(e); }
+    }
+  }
+  updateRotate();
+}
+let resizeTimer = 0;
+const scheduleResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(onResize, 120); };
+window.addEventListener('resize', scheduleResize);
+window.addEventListener('orientationchange', scheduleResize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleResize);
+applyLayoutVars();
 
 // ---- exit confirm ----
 function askExit(state) {
@@ -239,6 +316,7 @@ function teardown(state) {
   $('hud').replaceChildren();
   input.setLayout('none');
   fitCanvas(false);
+  updateRotate();
 }
 
 function stopGame() {

@@ -2,8 +2,17 @@
 html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
   font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
   touch-action:none;overscroll-behavior:none}
-#app{position:relative;margin:0 auto;width:100%;max-width:480px;height:100vh;height:100dvh;
+/* 기둥 밖(태블릿/PC 여백): 어두운 픽셀 체크 무늬 */
+body{background-color:#0c0820;
+  background-image:linear-gradient(45deg,#150f33 25%,transparent 25%,transparent 75%,#150f33 75%),
+    linear-gradient(45deg,#150f33 25%,transparent 25%,transparent 75%,#150f33 75%);
+  background-size:24px 24px;background-position:0 0,12px 12px}
+/* 세로 기둥 폭: 휴대폰 = 화면 폭, 넓은 화면 = 높이×0.62 (480~640px). js/core/layout.js appWidth()와 같은 규칙 */
+#app{position:relative;margin:0 auto;width:100%;max-width:480px;
+  max-width:min(100vw,max(480px,min(62vh,640px)));max-width:min(100vw,max(480px,min(62dvh,640px)));
+  height:100vh;height:100dvh;
   display:flex;flex-direction:column;background:#1b1340;overflow:hidden;
+  box-shadow:0 0 0 4px #0b0620,0 0 0 8px #2a1f5c,0 0 48px 12px rgba(0,0,0,.55);
   padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 #hud{flex:0 0 auto;z-index:5}
 #stage{position:relative;flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -11,6 +20,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
   touch-action:none;background:#2a1f5c}
 /* fullscreen 게임(점프맵): 캔버스가 화면 전체, HUD는 위에 겹침 */
 #game.fill{aspect-ratio:auto;width:100%;height:100%;max-width:none;max-height:none}
+/* 게임 중 화면 비율이 바뀌면 늘리지 않고 비율을 지켜 가운데에(크기는 main.js placeCanvas가 px로 지정) */
+#game.contain{aspect-ratio:auto;max-width:100%;max-height:100%;box-shadow:0 0 0 4px #0b0620}
 #app.full{padding-top:0;padding-bottom:0}
 #app.full #stage{position:absolute;inset:0}
 #app.full #hud{position:absolute;left:0;right:0;top:0;padding-top:env(safe-area-inset-top);
@@ -74,7 +85,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 
 /* ui */
 .ui-screen{position:absolute;inset:0;background:#1b1340;display:flex;flex-direction:column;overflow-y:auto;touch-action:pan-y;
-  padding:14px 14px calc(14px + env(safe-area-inset-bottom));font-size:18px}
+  padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));font-size:18px}
 .ui-screen button{font-family:inherit;color:#fff;cursor:pointer;touch-action:manipulation}
 .ui-screen button:disabled{cursor:default}
 .ui-btn{min-height:64px;padding:0 28px;border:0;border-radius:18px;font-size:28px;font-weight:800;background:#4a3a9c;box-shadow:0 5px 0 rgba(0,0,0,.3)}
@@ -86,7 +97,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .ui-hud-hearts{color:#ff4d6d;letter-spacing:1px;font-size:18px;white-space:nowrap}
 .ui-hud-energy{position:relative;flex:1;height:22px;border-radius:12px;background:rgba(255,255,255,.18);overflow:hidden;min-width:60px}
 .ui-hud-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#ffb703,#ffd23f);transition:width .3s}
-.ui-hud-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;text-shadow:0 1px 2px #000}
+.ui-hud-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;text-shadow:0 1px 2px #000}
 .ui-hud-score{min-width:0;text-align:right;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ui-hud-icon{flex:none;width:44px;height:44px;border:0;border-radius:12px;background:rgba(255,255,255,.2);color:#fff;font-family:inherit;font-size:22px;font-weight:800;padding:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation;cursor:pointer}
 .ui-hud-icon[hidden]{display:none}
@@ -106,7 +117,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .ui-confirm-go{background:#26890c}.ui-confirm-out{background:#e21b3c}
 
 /* quiz */
-.ui-quiz{gap:10px;padding-top:10px}
+.ui-quiz{gap:10px;padding-top:calc(10px + env(safe-area-inset-top))}
 .ui-quiz-top{display:flex;align-items:center;gap:8px}
 .ui-quiz-gauge{position:relative;flex:1;height:30px;border-radius:16px;background:rgba(255,255,255,.18);overflow:hidden}
 .ui-quiz-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#ffb703,#ffd23f);transition:width .45s cubic-bezier(.3,1.4,.5,1)}
@@ -134,9 +145,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .ui-quiz-fb{min-height:32px;text-align:center;font-size:24px;font-weight:800}
 .ui-quiz-fb.ok{color:#7CFC6B}
 .ui-quiz-fb.bad{color:#ffb4c0}
-.ui-quiz-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;align-content:start}
+.ui-quiz-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;flex:1;align-content:start}
 .ui-choice{min-height:96px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:18px;
-  font-size:32px;font-weight:900;padding:6px 8px;box-shadow:0 6px 0 rgba(0,0,0,.3);word-break:keep-all}
+  font-size:32px;font-size:clamp(24px,8vw,32px);font-weight:900;padding:6px 8px;box-shadow:0 6px 0 rgba(0,0,0,.3);word-break:keep-all;min-width:0}
+.ui-label{min-width:0;overflow-wrap:anywhere;line-height:1.1}
 .ui-choice:active:not(:disabled){transform:translateY(4px);box-shadow:0 2px 0 rgba(0,0,0,.3)}
 .ui-shape{font-size:24px;opacity:.85}
 .ui-red{background:#e21b3c}.ui-blue{background:#1368ce}.ui-yellow{background:#d89e00}.ui-green{background:#26890c}
@@ -191,7 +203,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
     inset 3px 3px 0 0 #2a1f66,inset -3px -3px 0 0 #5a47c0}
 .px-sel-ico .px-icon{width:24px;height:24px}
 .px-sel-lab{font-size:16px;color:var(--px-yel);line-height:1.1}
-.px-sel-val{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px;line-height:1.2}
+.px-sel-val{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px;font-size:clamp(14px,4.5vw,18px);line-height:1.2}
 .px-sel.warn .px-sel-val{color:var(--px-red)}
 .px-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:22px 4px 0;padding:0 0 14px;touch-action:pan-y}
 .px-tile{position:relative;aspect-ratio:1/1;width:100%;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
@@ -213,7 +225,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .px-toast.on{opacity:1;transform:translate(-50%,0)}
 
 /* popup */
-.px-modal-back{position:fixed;top:0;bottom:0;left:50%;width:100%;max-width:480px;transform:translateX(-50%);z-index:40;
+.px-modal-back{position:fixed;top:0;bottom:0;left:50%;width:100%;max-width:var(--app-w,480px);transform:translateX(-50%);z-index:40;
   display:flex;align-items:center;justify-content:center;padding:20px;
   background:rgba(8,4,24,.78);background-image:linear-gradient(45deg,rgba(0,0,0,.25) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.25) 75%);background-size:4px 4px;
   animation:px-fade .12s steps(3)}
@@ -267,3 +279,62 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f0a26;color:#fff;
 .review-retry{background:#26890c}.review-exit{background:#4a3a9c}
 @keyframes review-in{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:none}}
 @keyframes review-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* ---- 화면 크기 최적화 ---- */
+/* 넓은 기둥(태블릿/PC)에서 글자·버튼을 비례 확대. --ui-scale은 main.js가 기둥 폭으로 계산(휴대폰은 1).
+   조작 버튼(#controls)은 JS가 px 좌표로 움직이므로 확대하지 않는다(아이템 버튼만 예외). */
+@supports (zoom:1){
+  #hud > .ui-hud,.ui-screen,.ui-confirm-box,.review-banner,.review-btns,.ctl-item{zoom:var(--ui-scale,1)}
+  .px-modal-back{max-width:calc(var(--app-w,480px) / var(--ui-scale,1))}
+}
+/* 좁은 휴대폰(≤380px): 보기 모양 기호를 구석으로 옮겨 긴 뜻(공원을 청소하다 등)이 들어갈 자리를 만든다 */
+@media (max-width:380px){
+  .ui-choice{position:relative;padding:6px 18px}
+  .ui-choice .ui-shape{position:absolute;left:4px;top:3px;font-size:14px}
+  .ui-quiz-choices.fig .ui-label{font-size:23px}
+  .px-sel{padding:6px 2px}
+}
+/* 낮은 화면(320x480 등): 퀴즈가 스크롤 없이 들어가도록 촘촘하게 */
+@media (max-height:560px){
+  .ui-quiz{gap:6px}
+  .ui-quiz-gauge{height:26px}
+  .ui-quiz-close{width:44px;height:44px}
+  .ui-quiz-title{font-size:15px}
+  .ui-quiz-q{min-height:68px;font-size:36px;padding:6px 10px}
+  .ui-quiz-q.word{min-height:88px;gap:2px}
+  .ui-q-word{font-size:36px}
+  .ui-speak{width:48px;height:48px;font-size:24px}
+  .ui-q-figure svg{width:104px;height:104px}
+  .ui-quiz-fb{min-height:26px;font-size:20px}
+  .ui-quiz-choices{gap:10px}
+  .ui-choice{min-height:64px}
+  .px-tiles{gap:12px;margin-top:10px}
+}
+/* 가로로 눕힌 휴대폰의 시작 화면: 게임 타일 4개를 한 줄로 */
+@media (orientation:landscape) and (max-height:500px){
+  .px-screen{padding-top:calc(10px + env(safe-area-inset-top))}
+  .px-logo{margin-bottom:8px}
+  .px-logo-ico .px-icon{width:36px;height:36px}
+  .px-title{font-size:26px}
+  .px-tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+  .px-tile-name{font-size:14px}
+  .px-tile-best{font-size:14px}
+}
+/* 가로 휴대폰에서 게임 중: 세로로 돌려 달라는 안내(게임은 멈춤, 상태 유지) */
+.rotate-overlay{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:20px calc(20px + env(safe-area-inset-right)) 20px calc(20px + env(safe-area-inset-left));text-align:center;
+  background-color:#1b1340;background-image:linear-gradient(45deg,#211850 25%,transparent 25%,transparent 75%,#211850 75%),
+    linear-gradient(45deg,#211850 25%,transparent 25%,transparent 75%,#211850 75%);background-size:16px 16px;background-position:0 0,8px 8px;
+  font-family:Galmuri11,"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;touch-action:none}
+.rotate-overlay[hidden]{display:none}
+.rotate-phone{position:relative;width:96px;height:60px;background:#ffd23f;
+  box-shadow:-4px 0 0 0 #0b0620,4px 0 0 0 #0b0620,0 -4px 0 0 #0b0620,0 4px 0 0 #0b0620,8px 8px 0 0 rgba(0,0,0,.35);
+  animation:rotate-hint 2.4s steps(1) infinite}
+.rotate-phone i{position:absolute;left:12px;right:12px;top:8px;bottom:8px;background:#3aa0ff;box-shadow:inset 4px 4px 0 0 #8ccbff}
+.rotate-title{font-size:24px;font-weight:900;color:#ffd23f;text-shadow:2px 2px 0 #0b0620}
+.rotate-sub{font-size:16px;color:#cfc8f5}
+@keyframes rotate-hint{0%{transform:none}50%{transform:rotate(-90deg)}}
+/* 움직임 줄이기 설정: 장식 애니메이션 끄기 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
