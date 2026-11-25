@@ -1,10 +1,11 @@
 // 못깨는 타워: tower assembly + mutator envs (pure, no DOM).
 // buildTower stacks `sectionCount` hand-authored section patterns (sections.js) bottom-up, SECTION_H apart,
 // in absolute world coordinates (y up, 360px wide, ground top at y = 0).
-import { SECTIONS, SECTION_H, WORLD_W, REST_X, REST_W, mirrorPattern, isCompatible } from './sections.js';
+import { SECTIONS, SECTION_H, WORLD_W, REST_X, REST_W, mirrorPattern, isCompatible, shiftY, familyGroup, NO_PIT_AFTER, hasEntryLava } from './sections.js';
 import { WIND_SPEED } from '../jump/world.js';
 
 export const GROUND_W = 200;
+export const MIN_GROUPS = 4;   // every tower mixes at least this many skeleton groups
 
 // Mutator kinds that map to a stepPlayer env (the solver proves patterns against each of these).
 export const ENV_KINDS = ['none', 'lowgravity', 'jumppower-low', 'jumppower-high', 'wind-left', 'wind-right'];
@@ -74,8 +75,8 @@ function pick(rng, list) {
 // - platforms: absolute coords; [0] = the ground (y 0, w GROUND_W); each section adds its pattern platforms
 //   (incl. spikes) and then its exit rest platform ({rest:true}); every platform carries `section` (0-based,
 //   -1 for the ground). The last rest platform is the goal (feature 'goal').
-// - Slots: tier by slotTier(); never the same pattern twice and never the same skeleton family as the previous
-//   section (family drawn first, then a pattern of it); tier-3 slots use non-final-gate patterns and
+// - Slots: tier by slotTier(); never the same pattern twice and never the same skeleton GROUP (familyGroup) as the
+//   previous section, at least MIN_GROUPS different groups per tower (group drawn first, then family, then pattern); tier-3 slots use non-final-gate patterns and
 //   the last slot a finalGate pattern (falls back to any unused tier-3 one). Each pattern is mirrored with
 //   probability 1/2. Deterministic for a given rng sequence.
 // - practice mode: the rest platforms after sections 2, 4, 6 (every 2nd, not the goal) get feature
@@ -103,19 +104,42 @@ export function buildTower(rng, { mode = 'practice', sectionCount = 8, mutator }
     }
     if (!cands.length) cands = free;
     if (!cands.length) throw new Error('buildTower: not enough section patterns');
-    // skeleton mixing: never the same family as the section below (when another one is available), and the
-    // family is drawn before the pattern so a family with many patterns (the 9 switchbacks) does not dominate
-    const prev = sections.length ? sections[sections.length - 1].family : null;
-    let pool = cands.filter((p) => p.family !== prev);
+    // skeleton mixing: the GROUP (switchback / slab / stones / drop / airjump / mixed) is drawn first, then a family of
+    // it, then a pattern, so a group with many patterns (switchbacks, slabs) does not dominate. Never the same group
+    // as the section below (when another is available); groups not yet in this tower are twice as likely, and when
+    // the remaining slots are (nearly) only enough to reach MIN_GROUPS different groups, only unused groups are drawn.
+    const prev = sections.length ? familyGroup(sections[sections.length - 1].family) : null;
+    const prevId = sections.length ? sections[sections.length - 1].id : null;
+    // 용암 입구 구간 바로 아래에는 가장자리 창문으로 나가는 패턴을 두지 않는다(용암에 막힘)
+    if (!(prevId && NO_PIT_AFTER.has(prevId))) { /* any */ } else {
+      const safe = cands.filter((p) => !hasEntryLava(p));
+      if (safe.length) cands = safe;
+    }
+    let pool = cands.filter((p) => familyGroup(p.family) !== prev);
     if (!pool.length) pool = cands;
-    const fam = pick(rng, [...new Set(pool.map((p) => p.family))]);
-    const base = pick(rng, pool.filter((p) => p.family === fam));
+    const usedG = new Set(sections.map((s) => familyGroup(s.family)));
+    if (usedG.size + (sectionCount - i) <= MIN_GROUPS + 2) {   // two slots of slack: the last slots are restricted to final-gate patterns
+      const fresh = pool.filter((p) => !usedG.has(familyGroup(p.family)));
+      if (fresh.length) pool = fresh;
+    }
+    const usedF = new Set(sections.map((s) => s.family));
+    if (usedF.size + (sectionCount - i) <= MIN_GROUPS + 2) {   // the same for plain families (slab-* layouts count apart)
+      const freshF = pool.filter((p) => !usedF.has(p.family));
+      if (freshF.length) pool = freshF;
+    }
+    const groups = [...new Set(pool.map((p) => familyGroup(p.family)))];
+    const weighted = groups.flatMap((g) => (usedG.has(g) ? [g] : [g, g]));
+    const grp = pick(rng, weighted);
+    const gpool = pool.filter((p) => familyGroup(p.family) === grp);
+    const fams = [...new Set(gpool.map((p) => p.family))];
+    const fam = pick(rng, fams.flatMap((f) => (usedF.has(f) ? [f] : [f, f])));
+    const base = pick(rng, gpool.filter((p) => p.family === fam));
     used.add(base.id);
     const mirrored = rng() < 0.5;
     const pat = mirrored ? mirrorPattern(base) : base;
     const y0 = i * SECTION_H, y1 = y0 + SECTION_H;
     for (const q of pat.platforms) {
-      const p = { ...q, y: q.y + y0, section: i };
+      const p = { ...shiftY(q, y0), section: i };
       if (p.type !== 'spike' && !p.surface) p.surface = 'normal';
       platforms.push(p);
     }
@@ -139,7 +163,7 @@ export function buildTower(rng, { mode = 'practice', sectionCount = 8, mutator }
 // sectionPlatforms(): [entry rest (or the ground), exit rest, ...section platforms]. For solver checks.
 export function towerSectionPlatforms(tower, index) {
   const s = tower.sections[index];
-  const rel = (p) => ({ ...p, y: p.y - s.y0 });
+  const rel = (p) => shiftY(p, -s.y0);
   const entry = index === 0 ? tower.platforms[0] : tower.platforms.find((p) => p.rest && p.section === index - 1);
   const exit = tower.platforms.find((p) => p.rest && p.section === index);
   const body = tower.platforms.filter((p) => p.section === index && !p.rest);

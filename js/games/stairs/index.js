@@ -1,4 +1,9 @@
 import { createStairs } from './logic.js';
+import { getBest } from '../../core/storage.js';
+import {
+  drawStairsBackground, drawStairBlock, drawClimber, drawTapHint,
+} from './render.js';
+import { drawBadgePill, drawBannerCard } from '../common/canvas-fx.js';
 
 // Input policy: every tap is applied to the logic IMMEDIATELY (logic is instant,
 // so nothing is skipped or double-applied). The hop animation is only visual and
@@ -11,10 +16,12 @@ const BLOCK_H = 16;
 const HOP_SPEED = 9; // stairs per second (visual)
 const END_DELAY = 0.7;
 const HOP_H = 24;
-const DUST_LIFE = 0.35;
+const PART_LIFE = 0.38;
 const MAX_PARTICLES = 60;
 const PRESS_PX = 4;
 const KICK_PX = 3;
+const MILESTONES = new Set([25, 50, 100, 150, 200, 300, 500]);
+
 // damped-spring rebound after landing; t = seconds since landing
 function bounce(t) { return t > 1 ? 0 : Math.exp(-9 * t) * Math.cos(32 * t); }
 
@@ -31,6 +38,9 @@ export default {
     const W = ctx.width;
     const H = ctx.height;
     const st = createStairs(ctx.rng);
+    let best = 0;
+    try { best = getBest('stairs') || 0; } catch { best = 0; }
+
     const xs = [0]; // world x of each stair
     function wx(i) {
       while (xs.length <= i) {
@@ -45,6 +55,7 @@ export default {
     let camX = 0;
     let camY = 0;
     let shake = 0;
+    let wrongFlash = 0;
     let time = 0;
     let facing = 1;
     let busy = false;
@@ -54,6 +65,7 @@ export default {
     let offs = [];
     let landT = Infinity; // seconds since last landing
     let landIdx = 0;
+    let banner = null;
     const parts = [];
 
     function posAt(v) {
@@ -64,16 +76,79 @@ export default {
       return { x, y: y - Math.sin(Math.PI * f) * HOP_H };
     }
 
+    function pushPart(p) {
+      parts.push(p);
+      while (parts.length > MAX_PARTICLES) parts.shift();
+    }
+
+    function spawnDust(n) {
+      const x = wx(n);
+      const y = wy(n);
+      const cnt = 4 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < cnt; k++) {
+        const dir = k % 2 ? 1 : -1;
+        pushPart({
+          kind: k % 3 === 0 ? 'square' : 'circle',
+          x: x + dir * (4 + Math.random() * 10),
+          y: y + 2,
+          vx: dir * (30 + Math.random() * 55),
+          vy: -(45 + Math.random() * 65),
+          life: PART_LIFE,
+          max: PART_LIFE,
+          r: 1.6 + Math.random() * 2,
+          color: '#fff4e0',
+        });
+      }
+      if (n > 0 && n % 10 === 0) {
+        for (let k = 0; k < 8; k++) {
+          const ang = (k / 8) * Math.PI * 2;
+          pushPart({
+            kind: 'spark',
+            x,
+            y: y - 10,
+            vx: Math.cos(ang) * 70,
+            vy: Math.sin(ang) * 70 - 40,
+            life: 0.45,
+            max: 0.45,
+            r: 3.4,
+            color: '#ffd23f',
+          });
+        }
+      }
+    }
+
+    function spawnWrongChips(n) {
+      const x = wx(n), y = wy(n);
+      for (let k = 0; k < 6; k++) {
+        const dir = k % 2 ? 1 : -1;
+        pushPart({
+          kind: 'square',
+          x: x + (k - 2.5) * 6,
+          y: y - 2,
+          vx: dir * (25 + Math.random() * 45),
+          vy: -(60 + Math.random() * 70),
+          life: 0.42,
+          max: 0.42,
+          r: 2.5,
+          color: '#ff4d6d',
+        });
+      }
+    }
+
     function applyTap(dir) {
       const r = st.tap(dir);
       if (r.moved) {
         facing = dir === 'L' ? -1 : 1;
         ctx.sfx.play('step');
         try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { /* ignore */ }
-        // 기록은 캔버스 우측 상단 박스에 표시하므로 상단 표시줄 글씨는 비움(중복 제거)
+        if (MILESTONES.has(st.score)) {
+          banner = { text: `${st.score}층 돌파!`, sub: '계속 올라가요!', t: 0, dur: 1.8, color: '#ffd23f' };
+        }
       } else if (r.wrong) {
         ctx.sfx.play('hit');
         shake = 0.35;
+        wrongFlash = 0.45;
+        spawnWrongChips(st.pos);
         const left = ctx.hearts.lose();
         if (left <= 0) { over = true; endTimer = END_DELAY; }
       }
@@ -91,106 +166,6 @@ export default {
       applyTap(dir);
     }
 
-    function drawBackground() {
-      g.fillStyle = '#f3e9de';
-      g.fillRect(0, 0, W, H);
-      // brick wall bands (parallax 0.5)
-      const py = camY * 0.5;
-      const rowH = 64;
-      const colW = 72;
-      const off = ((py % rowH) + rowH) % rowH;
-      const offX = (((-camX * 0.5) % colW) + colW) % colW;
-      for (let r = -1; r < H / rowH + 2; r++) {
-        const y = r * rowH + off;
-        const idx = Math.round((y - py) / rowH);
-        g.fillStyle = idx % 2 ? '#eddfd1' : '#f1e5d8';
-        g.fillRect(0, y, W, rowH - 4);
-        for (let c = -1; c < W / colW + 2; c++) {
-          const x = c * colW + offX + 14;
-          const lit = ((idx * 7 + Math.round((x - offX) / colW) * 3) & 3) === 0;
-          g.fillStyle = '#cdbdad';
-          g.fillRect(x - 3, y + 7, 40, 38);
-          g.fillStyle = lit ? '#f7efcf' : '#dce8ee';
-          g.fillRect(x, y + 10, 34, 32);
-          g.fillStyle = 'rgba(255,255,255,0.4)';
-          g.fillRect(x + 3, y + 13, 10, 10);
-          g.fillStyle = '#cdbdad';
-          g.fillRect(x + 16, y + 10, 2, 32);
-        }
-      }
-      // soft light haze
-      g.fillStyle = 'rgba(255,250,244,0.28)';
-      g.fillRect(0, 0, W, H);
-    }
-
-    function drawBlock(i, sx, sy, current) {
-      const colors = ['#ff6b6b', '#4dabf7', '#51cf66', '#ffd43b', '#b197fc'];
-      const c = colors[i % colors.length];
-      g.fillStyle = 'rgba(40,30,20,0.35)';
-      g.fillRect(sx - BLOCK_W / 2 + 3, sy + 4, BLOCK_W, BLOCK_H);
-      g.fillStyle = c;
-      g.fillRect(sx - BLOCK_W / 2, sy, BLOCK_W, BLOCK_H);
-      g.fillStyle = 'rgba(255,255,255,0.35)';
-      g.fillRect(sx - BLOCK_W / 2, sy, BLOCK_W, 4);
-      g.strokeStyle = 'rgba(40,25,15,0.75)';
-      g.lineWidth = 2;
-      g.strokeRect(sx - BLOCK_W / 2, sy, BLOCK_W, BLOCK_H);
-      if (current) {
-        g.strokeStyle = '#fff';
-        g.lineWidth = 2;
-        g.strokeRect(sx - BLOCK_W / 2 + 2, sy + 2, BLOCK_W - 4, BLOCK_H - 4);
-      }
-    }
-
-    function spawnDust(n) {
-      const x = wx(n);
-      const y = wy(n);
-      const cnt = 4 + Math.floor(Math.random() * 3);
-      for (let k = 0; k < cnt; k++) {
-        const dir = k % 2 ? 1 : -1;
-        parts.push({
-          x: x + dir * (4 + Math.random() * 10),
-          y: y + 2,
-          vx: dir * (30 + Math.random() * 60),
-          vy: -(40 + Math.random() * 70),
-          life: DUST_LIFE,
-          r: 1.5 + Math.random() * 2,
-          sq: k % 3 === 0,
-        });
-      }
-      while (parts.length > MAX_PARTICLES) parts.shift();
-    }
-
-    function drawPlayer(sx, sy, sq, scx = 1) {
-      // feet at (sx, sy)
-      g.save();
-      g.translate(sx, sy);
-      g.scale(scx, sq);
-      // dark rim so the character reads against the wall
-      g.fillStyle = '#1b1b2a';
-      g.fillRect(-11, -20, 22, 18);
-      g.fillRect(-11, -7, 22, 7);
-      g.beginPath();
-      g.arc(0, -27, 12, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#3b5bdb';
-      g.fillRect(-9, -18, 18, 14); // body
-      g.fillStyle = '#343a40';
-      g.fillRect(-9, -5, 7, 5);
-      g.fillRect(2, -5, 7, 5); // feet
-      g.fillStyle = '#ffe0bd';
-      g.beginPath();
-      g.arc(0, -27, 10, 0, Math.PI * 2);
-      g.fill(); // head
-      g.fillStyle = '#e8590c';
-      g.beginPath();
-      g.arc(0, -30, 10, Math.PI, 0);
-      g.fill(); // hair
-      g.fillStyle = '#222';
-      g.fillRect(facing * 4 - 1.5, -28, 3, 4); // eye
-      g.restore();
-    }
-
     function render() {
       const b = bounce(landT);
       const kick = KICK_PX * b;
@@ -198,61 +173,67 @@ export default {
       let ox = 0;
       if (shake > 0) ox = Math.sin(time * 70) * 6 * (shake / 0.35);
       g.translate(ox, 0);
-      drawBackground();
+
+      drawStairsBackground(g, W, H, camX, camY, vi, time);
+
       const ci = Math.floor(vi);
       for (let i = Math.max(0, ci - 14); i <= ci + 26; i++) {
         const sx = W / 2 + wx(i) - camX;
         if (sx < -BLOCK_W || sx > W + BLOCK_W) continue; // off-screen cull
         const press = i === landIdx ? PRESS_PX * Math.max(0, b) : 0;
         const sy = H * 0.68 + wy(i) - camY + kick + press;
-        drawBlock(i, sx, sy, i === st.pos);
+        drawStairBlock(g, i, sx, sy, BLOCK_W, BLOCK_H, i === st.pos, i === st.pos ? wrongFlash : 0);
       }
+
+      if (st.pos === 0 && !over) {
+        drawTapHint(g, W / 2 + wx(0) - camX, H * 0.68 + wy(0) - camY + kick, st.expected(), time);
+      }
+
       const p = posAt(vi);
       const f = vi - Math.floor(vi);
       const air = Math.sin(Math.PI * f);
-      const sq = (1 + 0.18 * air) * (1 - 0.3 * b);
-      const scx = (1 - 0.1 * air) * (1 + 0.3 * b);
+      const sq = (1 + 0.16 * air) * (1 - 0.28 * b);
+      const scx = (1 - 0.1 * air) * (1 + 0.28 * b);
       const pPress = Math.floor(vi) === landIdx ? PRESS_PX * Math.max(0, b) : 0;
-      drawPlayer(W / 2 + p.x - camX, H * 0.68 + p.y - camY + kick + pPress, sq, scx);
+      drawClimber(g, {
+        x: W / 2 + p.x - camX,
+        y: H * 0.68 + p.y - camY + kick + pPress,
+        facing,
+        sq,
+        scx,
+        air,
+        time,
+        wrong: wrongFlash > 0 || over,
+        fast: st.pos - vi > 0.6,
+      });
+
       for (const q of parts) {
-        g.globalAlpha = Math.max(0, q.life / DUST_LIFE);
-        g.fillStyle = '#fff4e0';
+        const k = Math.max(0, q.life / q.max);
+        g.globalAlpha = k;
+        g.fillStyle = q.color;
         const qx = W / 2 + q.x - camX;
         const qy = H * 0.68 + q.y - camY + kick;
-        if (q.sq) g.fillRect(qx - q.r, qy - q.r, q.r * 2, q.r * 2);
-        else { g.beginPath(); g.arc(qx, qy, q.r, 0, Math.PI * 2); g.fill(); }
+        if (q.kind === 'square') {
+          g.fillRect(qx - q.r, qy - q.r, q.r * 2, q.r * 2);
+        } else if (q.kind === 'spark') {
+          const r = q.r * k;
+          g.beginPath();
+          g.moveTo(qx, qy - r * 1.4); g.lineTo(qx + r * 0.6, qy);
+          g.lineTo(qx, qy + r * 1.4); g.lineTo(qx - r * 0.6, qy);
+          g.closePath(); g.fill();
+        } else {
+          g.beginPath(); g.arc(qx, qy, q.r, 0, Math.PI * 2); g.fill();
+        }
       }
       g.globalAlpha = 1;
       g.restore();
 
-      // 기록(층수): 우측 상단, 어두운 알약 배경 + 노란 글씨로 연한 벽 위에서도 잘 보이게
-      const label = `${st.score}층`;
+      // 기록(층수) + 마일스톤 배너: CSS 픽셀 기준으로 일정 크기 유지
       g.save();
-      // 화면 폭에 따라 캔버스가 늘어나도 박스 크기가 일정하도록 CSS 픽셀 기준으로 그린다
       const cssW = (ctx.canvas && ctx.canvas.clientWidth) || W;
       g.scale(W / cssW, W / cssW);
-      g.font = '900 30px sans-serif';
-      g.textAlign = 'right';
-      g.textBaseline = 'middle';
-      const tw = g.measureText(label).width;
-      const pw = tw + 28;
-      const ph = 44;
-      const px = cssW - 12 - pw;
-      const py = 62;
-      g.fillStyle = 'rgba(27,19,64,0.88)';
-      g.strokeStyle = '#ffffff';
-      g.lineWidth = 3;
-      g.beginPath();
-      g.moveTo(px + ph / 2, py);
-      g.arcTo(px + pw, py, px + pw, py + ph, ph / 2);
-      g.arcTo(px + pw, py + ph, px, py + ph, ph / 2);
-      g.arcTo(px, py + ph, px, py, ph / 2);
-      g.arcTo(px, py, px + pw, py, ph / 2);
-      g.closePath();
-      g.fill();
-      g.stroke();
-      g.fillStyle = '#ffd23f';
-      g.fillText(label, cssW - 12 - 14, py + ph / 2 + 1);
+      drawBadgePill(g, cssW - 10, 62, `${st.score}층`, `최고 ${Math.max(best, st.score)}층`);
+      if (banner) drawBannerCard(g, cssW, 134, banner);
       g.restore();
     }
 
@@ -267,6 +248,8 @@ export default {
       update(dt) {
         time += dt;
         if (shake > 0) shake = Math.max(0, shake - dt);
+        if (wrongFlash > 0) wrongFlash = Math.max(0, wrongFlash - dt);
+        if (banner) { banner.t += dt; if (banner.t >= banner.dur) banner = null; }
         // hop toward logical pos (never overshoots, never skips: visual only)
         if (landT < 10) landT += dt;
         if (vi < st.pos) {

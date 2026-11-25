@@ -1,7 +1,12 @@
 import {
-  SLAB_H, createBase, movingAt, place, hueFor, speedFor, axisFor, project, ISO_X, ISO_Y,
+  SLAB_H, REGROW_FROM, createBase, movingAt, place, hueFor, speedFor, axisFor, project, ISO_X, ISO_Y,
   sparkleAt, sparkleDone, fitView,
 } from './logic.js';
+import { getBest } from '../../core/storage.js';
+import {
+  drawStackBackground, drawPedestal, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
+} from './render.js';
+import { drawBadgePill, drawChipPill, createParticlePool } from '../common/canvas-fx.js';
 
 const K = 0.57;            // 월드 -> 화면 배율 (바닥 200 -> 약 195px)
 const CAM_Y_FRAC = 0.58;   // 맨 위 층이 화면 높이의 58% 지점
@@ -11,18 +16,12 @@ const END_SEC = 1.0;
 const TAP_GUARD = 0.12;    // 새 블록이 나온 직후 오탭 무시
 const GRAVITY = 1500;
 const DEBRIS_LIFE = 1.1;
-const RING_SEC = 0.55;
 const TOAST_SEC = 0.8;
 const MAX_DRAW_LAYERS = 30;
 const REVIEW_ZOOM_SEC = 1.4;
 const REVIEW_PAD = { top: 172, bottom: 130, side: 24 }; // CSS px
 const ZERO = { x: 0, z: 0, y: 0 };
 const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
-
-function rr(g, x, y, w, h, r) {
-  g.beginPath();
-  if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
-}
 
 export default {
   id: 'stack3d',
@@ -37,13 +36,14 @@ export default {
     const rng = ctx.rng || Math.random;
     const baseHue = Math.floor(rng() * 360);
 
-    let stack;          // [{ slab, hue, flash }]
+    let stack;          // [{ slab, hue, flash, regrow }]
     let state;          // 'moving' | 'settle' | 'quiz' | 'over'
     let mt, time, combo, settleT, pendingEnd, ended, destroyed, tapped;
-    let debris, rings, toasts, clouds;
+    let debris, toasts, clouds, shake = 0, missFlash = 0, best = 0;
     let cam, bgHue, off = null, timeScale = 1;
     let rv = null, reviewT = 0; // 리뷰: { from:{k,ox,oy}, to:{k,ox,oy} }
     let vk = K, vcam = null, vox = 0, voy = 0;
+    const particles = createParticlePool(80);
 
     const floors = () => stack.length - 1;
     const layer = () => stack.length; // 지금 놓는 층 번호 (바닥=0)
@@ -57,10 +57,11 @@ export default {
     }
 
     function init() {
-      stack = [{ slab: createBase(), hue: hueOf(0), flash: 0, sp: null, perfect: false }];
-      state = 'moving'; mt = 0; time = 0; combo = 0; settleT = 0;
+      try { best = getBest('stack3d') || 0; } catch { best = 0; }
+      stack = [{ slab: createBase(), hue: hueOf(0), flash: 0, regrow: 0, sp: null, perfect: false }];
+      state = 'moving'; mt = 0; time = 0; combo = 0; settleT = 0; shake = 0; missFlash = 0;
       pendingEnd = false; ended = false; destroyed = false; tapped = false;
-      debris = []; rings = []; toasts = [];
+      debris = []; toasts = []; particles.clear();
       cam = camTarget();
       bgHue = hueOf(0) + 180;
       clouds = [];
@@ -107,15 +108,19 @@ export default {
       if (r.kind === 'miss') {
         ctx.sfx.play('hit');
         ctx.hearts.lose();
+        shake = 0.28;
+        missFlash = 0.35;
         if (ctx.hearts.value <= 0) pendingEnd = true;
         afterPlace(pendingEnd ? END_SEC : MISS_SEC);
         return;
       }
-      stack.push({ slab: r.slab, hue, flash: r.kind === 'perfect' ? 1 : 0, sp: 0, perfect: r.kind === 'perfect' });
+      const prev = prevSlab();
+      const grew = r.kind === 'perfect' && (r.slab.w > prev.w || r.slab.d > prev.d);
+      stack.push({ slab: r.slab, hue, flash: r.kind === 'perfect' ? 1 : 0, regrow: grew ? 1 : 0, sp: 0, perfect: r.kind === 'perfect' });
       if (r.kind === 'perfect') {
         ctx.sfx.play('note', combo - 1);
-        rings.push({ cx: r.slab.cx, cz: r.slab.cz, y: y + SLAB_H, R: Math.max(r.slab.w, r.slab.d) / 2, t: 0 });
-        toasts.push({ text: `PERFECT x${combo}`, t: 0 });
+        particles.emitSparks(W / 2, y + SLAB_H, combo >= REGROW_FROM ? '#ffd23f' : '#ffffff', 8);
+        toasts.push({ text: 'PERFECT!', t: 0 });
       } else {
         ctx.sfx.play('step');
       }
@@ -126,16 +131,19 @@ export default {
       if (destroyed) return;
       dt *= timeScale;
       time += dt;
+      if (shake > 0) shake = Math.max(0, shake - dt);
+      if (missFlash > 0) missFlash = Math.max(0, missFlash - dt);
+      particles.step(dt);
       for (let i = debris.length - 1; i >= 0; i--) {
         const d = debris[i];
         d.t += dt; d.vy += GRAVITY * dt; d.y -= d.vy * dt;
         d.dx += d.vx * dt; d.dz += d.vz * dt;
         if (d.t > DEBRIS_LIFE) debris.splice(i, 1);
       }
-      for (let i = rings.length - 1; i >= 0; i--) { rings[i].t += dt; if (rings[i].t > RING_SEC) rings.splice(i, 1); }
       for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].t += dt; if (toasts[i].t > TOAST_SEC) toasts.splice(i, 1); }
       for (const s of stack) {
         if (s.flash > 0) s.flash = Math.max(0, s.flash - dt / 0.4);
+        if (s.regrow > 0) s.regrow = Math.max(0, s.regrow - dt / 0.55);
         if (s.sp !== null) { s.sp += dt; if (sparkleDone(s.sp, s.perfect)) s.sp = null; }
       }
       for (const c of clouds) { c.x += c.vx * dt; if (c.x < -80) c.x = W + 80; else if (c.x > W + 80) c.x = -80; }
@@ -197,52 +205,23 @@ export default {
       g.closePath();
     }
 
-    function drawSlab(s, y0, hue, alpha = 1, flash = 0) {
-      const x0 = s.cx - s.w / 2, x1 = s.cx + s.w / 2, z0 = s.cz - s.d / 2, z1 = s.cz + s.d / 2;
-      const y1 = y0 + SLAB_H;
-      if (alpha < 1) g.globalAlpha = Math.max(0, alpha);
-      poly([P(x1, z0, y1), P(x1, z1, y1), P(x1, z1, y0), P(x1, z0, y0)]); // 오른쪽 면
-      g.fillStyle = `hsl(${hue},70%,52%)`;
-      g.fill();
-      poly([P(x0, z1, y1), P(x1, z1, y1), P(x1, z1, y0), P(x0, z1, y0)]); // 왼쪽 면
-      g.fillStyle = `hsl(${hue},68%,62%)`;
-      g.fill();
-      poly([P(x0, z0, y1), P(x1, z0, y1), P(x1, z1, y1), P(x0, z1, y1)]); // 윗면
-      g.fillStyle = `hsl(${hue},72%,${Math.min(96, 72 + flash * 22)}%)`;
-      g.fill();
-      if (vk > 0.2) {
-        g.strokeStyle = `hsla(${hue},55%,35%,0.28)`;
-        g.lineWidth = 1;
-        g.stroke();
-      }
-      if (alpha < 1) g.globalAlpha = 1;
+    function drawSlab(s, y0, hue, alpha = 1, flash = 0, regrow = 0) {
+      drawSlabPro(g, s, y0, SLAB_H, hue, P, vk, { alpha, flash, regrow });
     }
 
     function drawBackground() {
-      const h = ((bgHue % 360) + 360) % 360;
-      const gr = g.createLinearGradient(0, 0, 0, H);
-      gr.addColorStop(0, `hsl(${h},38%,80%)`);
-      gr.addColorStop(1, `hsl(${(h + 28) % 360},42%,93%)`);
-      g.fillStyle = gr;
-      g.fillRect(0, 0, W, H);
-      g.fillStyle = 'rgba(255,255,255,0.28)';
-      const span = H + 240;
-      for (const c of clouds) {
-        const y = ((c.y + cam.y * K * c.par) % span + span) % span - 120; // 탑이 오르면 구름이 아래로 흘러 오르는 느낌
-        g.beginPath();
-        g.ellipse(c.x, y, c.r * 1.5, c.r * 0.7, 0, 0, Math.PI * 2);
-        g.fill();
-      }
+      drawStackBackground(g, W, H, cam.y, bgHue, floors(), clouds, time, vk);
     }
 
     function drawStack() {
       if (state === 'review') return drawReviewStack();
       const lo = Math.max(0, stack.length - MAX_DRAW_LAYERS);
+      if (lo === 0) drawPedestal(g, stack[0].slab, P, stack[0].hue);
       for (let i = lo; i < stack.length; i++) {
         const e = stack[i];
         const p = P(e.slab.cx, e.slab.cz, i * SLAB_H);
         if (p.sy - e.slab.w * K * 0.5 > H + 40) continue;
-        drawSlab(e.slab, i * SLAB_H, e.hue, 1, e.flash);
+        drawSlab(e.slab, i * SLAB_H, e.hue, 1, e.flash, e.regrow);
         if (e.sp !== null) drawShine(e, i);
       }
       for (let i = lo; i < stack.length; i++) if (stack[i].sp !== null) drawStars(stack[i], i);
@@ -251,13 +230,16 @@ export default {
     // 리뷰: 전체 층을 그리고, 반짝이는 띠가 아래에서 위로 층을 타고 오른다
     function drawReviewStack() {
       const n = stack.length;
+      drawPedestal(g, stack[0].slab, P, stack[0].hue);
       const cycle = n * 0.05 + 2.5;
       for (let i = 0; i < n; i++) {
         const e = stack[i];
-        drawSlab(e.slab, i * SLAB_H, e.hue, 1, 0);
+        drawSlab(e.slab, i * SLAB_H, e.hue, 1, 0, 0);
         const tt = ((reviewT - 0.6 - i * 0.05) % cycle + cycle) % cycle;
         if (reviewT > 0.6 && tt < 0.5) drawShine({ slab: e.slab, sp: tt, perfect: false }, i);
       }
+      const top = stack[n - 1];
+      drawReviewCrown(g, top.slab, n * SLAB_H, P, time);
     }
 
     // 윗면+옆면 실루엣 안에서 대각선으로 지나가는 광택 띠
@@ -328,35 +310,32 @@ export default {
         const s = { cx: d.slab.cx + d.dx, cz: d.slab.cz + d.dz, w: d.slab.w, d: d.slab.d };
         drawSlab(s, d.y, d.hue, 1 - d.t / DEBRIS_LIFE);
       }
-      g.lineWidth = 3;
-      for (const r of rings) {
-        const t = r.t / RING_SEC;
-        const R = r.R * (0.7 + t * 0.9);
-        const c = P(r.cx, r.cz, r.y);
-        g.globalAlpha = 1 - t;
-        g.strokeStyle = '#ffffff';
-        g.beginPath();
-        g.ellipse(c.sx, c.sy, R * K * ISO_X * Math.SQRT2, R * K * ISO_Y * Math.SQRT2, 0, 0, Math.PI * 2);
-        g.stroke();
-      }
-      g.globalAlpha = 1;
+      const pRef = prevSlab();
+      particles.draw(g, (wy) => P(pRef.cx, pRef.cz, wy).sy);
       if (toasts.length) {
+        g.save();
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.font = '900 20px sans-serif';
-        g.lineWidth = 4;
-        g.strokeStyle = 'rgba(27,19,64,0.8)';
-        const p = prevSlab();
-        const top = P(p.cx, p.cz, stack.length * SLAB_H);
+        g.lineWidth = 3;
+        g.strokeStyle = 'rgba(20,14,50,0.45)';
+        const top = P(pRef.cx, pRef.cz, stack.length * SLAB_H);
         for (const t of toasts) {
           const k = t.t / TOAST_SEC;
-          g.globalAlpha = Math.max(0, Math.min(1, (1 - k) * 2));
-          const y = top.sy - 70 - k * 26;
+          g.globalAlpha = Math.max(0, Math.min(0.45, (1 - k) * 0.9));
+          const y = top.sy - 68 - k * 24;
           g.strokeText(t.text, W / 2, y);
           g.fillStyle = '#ffffff';
           g.fillText(t.text, W / 2, y);
         }
-        g.globalAlpha = 1;
+        g.restore();
+      }
+      if (missFlash > 0) {
+        g.save();
+        g.strokeStyle = `rgba(255,77,109,${(missFlash / 0.35 * 0.45).toFixed(2)})`;
+        g.lineWidth = 10;
+        g.strokeRect(5, 5, W - 10, H - 10);
+        g.restore();
       }
     }
 
@@ -370,47 +349,29 @@ export default {
     function drawOverlay() {
       g.save();
       const { cssW, cssH } = cssScale();
-      const text = `${floors()}층`;
-      g.textAlign = 'right';
-      g.textBaseline = 'middle';
-      g.font = '900 28px sans-serif';
-      const pw = g.measureText(text).width + 30;
-      const ph = 44, px = cssW - 10 - pw, py = 62;
-      g.fillStyle = 'rgba(27,19,64,0.88)';
-      g.strokeStyle = '#ffffff';
-      g.lineWidth = 3;
-      rr(g, px, py, pw, ph, 16);
-      g.fill();
-      g.stroke();
-      g.fillStyle = '#ffd23f';
-      g.fillText(text, cssW - 10 - 15, py + ph / 2 + 1);
+      const fl = floors();
+      const bot = drawBadgePill(g, cssW - 10, 62, `${fl}층`, `최고 ${Math.max(best, fl)}층`);
       if (combo > 0) {
-        const ct = `x${combo}`;
-        g.font = '900 16px sans-serif';
-        const cw = g.measureText(ct).width + 20;
-        g.fillStyle = 'rgba(255,255,255,0.9)';
-        rr(g, cssW - 10 - cw, py + ph + 6, cw, 26, 13);
-        g.fill();
-        g.fillStyle = '#7a4dff';
-        g.fillText(ct, cssW - 10 - 10, py + ph + 6 + 14);
+        const col = combo >= 6 ? '#ff79c6' : combo >= REGROW_FROM ? '#ffd23f' : '#9be0ff';
+        drawChipPill(g, cssW - 10, bot + 6, `PERFECT x${combo}`, col);
       }
-      if (!tapped) {
-        g.textAlign = 'center';
-        g.font = '900 34px sans-serif';
-        g.globalAlpha = 0.35 + 0.25 * Math.sin(time * 5);
-        g.fillStyle = '#ffffff';
-        g.fillText('TAP!', cssW / 2, cssH - 130);
-        g.globalAlpha = 1;
-      }
+      if (!tapped) drawTapPrompt(g, cssW, cssH, time);
       g.restore();
     }
 
     function render() {
       if (state === 'review' && rv) { const v = reviewView(); vk = v.k; vcam = ZERO; vox = v.ox; voy = v.oy; } else { vk = K; vcam = cam; vox = OX; voy = OY; }
+      g.save();
+      if (shake > 0) g.translate(Math.sin(time * 75) * 4 * (shake / 0.28), Math.cos(time * 60) * 2.5 * (shake / 0.28));
       drawBackground();
       drawStack();
-      if (state === 'moving') drawSlab(moving().slab, layer() * SLAB_H, hueOf(layer()));
+      if (state === 'moving') {
+        const mv = moving();
+        drawMovingShadow(g, prevSlab(), mv.slab, layer() * SLAB_H, P);
+        drawSlab(mv.slab, layer() * SLAB_H, hueOf(layer()));
+      }
       drawEffects();
+      g.restore();
       if (state !== 'review') drawOverlay();
     }
 
@@ -429,7 +390,7 @@ export default {
           get moving() { const m = moving(); return { ...m.slab, axis: m.axis, offset: m.offset }; },
           get prev() { return { ...prevSlab() }; },
           get debrisCount() { return debris.length; },
-          get ringCount() { return rings.length; },
+          get ringCount() { return 0; },
           get tapped() { return tapped; },
           get mt() { return mt; },
           get cam() { return { ...cam }; },

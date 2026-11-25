@@ -181,26 +181,54 @@ export function drawBackground(g, W, H, camY, time = 0) {
     }
   }
 
-  // moon with halo, craters and rim light
+  // moon with halo, clean crescent geometry, earthshine and craters
   if (th.moonAlpha > 0.01) {
     const mx = W * 0.74, my = H * 0.2 + wrap(camY * 0.01, 30);
-    glow(g, mx, my, 90, '190,200,255', 0.3 * th.moonAlpha);
-    g.fillStyle = `rgba(150,160,210,${0.16 * th.moonAlpha})`;
+    const R = 26;
+    glow(g, mx, my, 90, '190,205,255', 0.34 * th.moonAlpha);
+    g.save();
+    g.translate(mx, my);
+    g.rotate(-0.32);
+
+    // subtle earthshine disc on the dark side
+    g.fillStyle = `rgba(140,158,220,${0.14 * th.moonAlpha})`;
     g.beginPath();
-    g.arc(mx, my, 30, 0, Math.PI * 2);
+    g.arc(0, 0, R - 0.5, 0, Math.PI * 2);
     g.fill();
-    g.fillStyle = `rgba(255,246,210,${0.95 * th.moonAlpha})`;
+
+    // exact two-arc crescent: outer left arc + inner right arc joining cleanly at tips
+    const aTip = 0.42 * Math.PI;
+    const xTip = R * Math.cos(aTip), yTip = R * Math.sin(aTip);
+    const dx = 12;
+    const R2 = Math.hypot(xTip - dx, yTip);
+    const bTop = Math.atan2(-yTip, xTip - dx);
+    const bBot = Math.atan2(yTip, xTip - dx);
+
+    const mGrad = g.createLinearGradient(-R, -R, 0, R);
+    mGrad.addColorStop(0, `rgba(255,252,224,${0.98 * th.moonAlpha})`);
+    mGrad.addColorStop(1, `rgba(255,230,148,${0.94 * th.moonAlpha})`);
+    g.fillStyle = mGrad;
     g.beginPath();
-    g.arc(mx, my, 30, 0, Math.PI * 2);
-    g.moveTo(mx + 40, my - 6);
-    g.arc(mx + 13, my - 6, 25, 0, Math.PI * 2, true);
+    g.arc(0, 0, R, aTip, -aTip, false);
+    g.arc(dx, 0, R2, bTop, bBot, true);
+    g.closePath();
     g.fill();
-    g.fillStyle = `rgba(200,180,140,${0.35 * th.moonAlpha})`;
-    g.beginPath(); g.arc(mx - 20, my + 6, 3.5, 0, Math.PI * 2); g.arc(mx - 12, my + 18, 2.5, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = `rgba(255,255,255,${0.8 * th.moonAlpha})`;
-    g.lineWidth = 1.5;
-    g.beginPath(); g.arc(mx, my, 30, Math.PI * 0.55, Math.PI * 1.45); g.stroke();
-    g.lineWidth = 1;
+
+    // subtle craters inside the lit crescent
+    g.fillStyle = `rgba(205,176,112,${0.36 * th.moonAlpha})`;
+    g.beginPath();
+    g.arc(-18.5, -5, 2.8, 0, Math.PI * 2);
+    g.arc(-16.5, 6.5, 2.1, 0, Math.PI * 2);
+    g.arc(-21, 1.5, 1.3, 0, Math.PI * 2);
+    g.fill();
+
+    // soft sunlit outer rim
+    g.strokeStyle = `rgba(255,255,245,${0.7 * th.moonAlpha})`;
+    g.lineWidth = 1.4;
+    g.beginPath();
+    g.arc(0, 0, R, aTip + 0.15, -aTip - 0.15, false);
+    g.stroke();
+    g.restore();
   }
 
   // ringed planet

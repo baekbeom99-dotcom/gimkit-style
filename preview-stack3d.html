@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사부작스쿨 — 3D 탑쌓기 테스트 버전 (Before / After)</title>
+<style>
+  :root {
+    --bg: #130d2e;
+    --surface: #211850;
+    --surface-2: #2d2268;
+    --border: rgba(255,255,255,0.14);
+    --text: #f5f3ff;
+    --muted: #c2b9ea;
+    --accent: #ffd23f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    padding: 20px 16px 36px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0; font-size: 24px; font-weight: 900; color: var(--accent); }
+  .sub { margin: 0; font-size: 14px; color: var(--muted); }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.04);
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+  .glab { font-size: 12px; font-weight: 800; color: var(--muted); margin-right: 4px; }
+  button {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: transform .1s, background .15s;
+  }
+  button:hover { background: #3b2d86; }
+  button:active { transform: translateY(1px); }
+  button.fx { background: #1c6e2f; border-color: rgba(255,255,255,0.22); }
+  button.fx:hover { background: #176929; }
+  button.on, button.fx.on { background: var(--accent); color: #1b1340; border-color: #fff6cc; }
+  .boards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 360px));
+    justify-content: center;
+    gap: 24px;
+  }
+  @media (max-width: 760px) {
+    .boards { grid-template-columns: minmax(280px, 360px); }
+  }
+  .board { display: flex; flex-direction: column; gap: 8px; }
+  .board-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+  .board-head h2 { margin: 0; font-size: 16px; font-weight: 800; }
+  .tag { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.12); color: var(--muted); }
+  .tag.new { background: rgba(63,208,74,0.22); color: #8ef576; }
+  canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 360 / 640;
+    display: block;
+    border-radius: 18px;
+    border: 2px solid var(--border);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+    background: #1b1340;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>3D 탑쌓기 테스트 버전 (Before / After)</h1>
+    <p class="sub">입체 그라데이션 블록, 기반 기둥, 투영 그림자, 다층 구름/별빛, 콤보 연출을 나란히 비교해 보세요.</p>
+  </header>
+
+  <div class="toolbar" role="region" aria-label="미리보기 제어">
+    <div class="group" id="g-height">
+      <span class="glab">높이</span>
+      <button type="button" data-h="5" class="on">5층 (낮)</button>
+      <button type="button" data-h="38">38층 (트와일라잇)</button>
+    </div>
+    <div class="group">
+      <span class="glab">연출 테스트</span>
+      <button type="button" class="fx" id="btn-perfect">퍼펙트 콤보</button>
+      <button type="button" class="fx" id="btn-cut">잘림 파편</button>
+      <button type="button" class="fx" id="btn-tap">시작 힌트 토글</button>
+      <button type="button" class="fx" id="btn-review">리뷰 왕관 토글</button>
+    </div>
+  </div>
+
+  <div class="boards">
+    <section class="board">
+      <div class="board-head">
+        <h2>Before (현재 게임)</h2>
+        <span class="tag">단색 면·공중 0층</span>
+      </div>
+      <canvas id="cv-before" width="360" height="640"></canvas>
+    </section>
+
+    <section class="board">
+      <div class="board-head">
+        <h2>After (테스트 버전)</h2>
+        <span class="tag new">기둥·그림자·콤보 연출</span>
+      </div>
+      <canvas id="cv-after" width="360" height="640"></canvas>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import {
+  SLAB_H, createBase, movingAt, hueFor, project,
+} from './js/games/stack3d/logic.js';
+import {
+  drawStackBackground, drawPedestal, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
+} from './js/games/stack3d/render.js';
+import { drawBadgePill, drawChipPill, rr, createParticlePool } from './js/games/common/canvas-fx.js';
+
+const W = 360, H = 640, K = 0.57;
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+const cvBefore = document.getElementById('cv-before');
+const cvAfter = document.getElementById('cv-after');
+for (const cv of [cvBefore, cvAfter]) { cv.width = W * dpr; cv.height = H * dpr; }
+const gOld = cvBefore.getContext('2d');
+const gNew = cvAfter.getContext('2d');
+
+const baseHue = 195;
+const clouds = [
+  { x: 60, y: 110, r: 38, par: 0.18, vx: 6 },
+  { x: 260, y: 210, r: 44, par: 0.25, vx: -5 },
+  { x: 150, y: 360, r: 34, par: 0.14, vx: 4 },
+  { x: 310, y: 480, r: 40, par: 0.22, vx: -4 },
+];
+
+let floors = 5;
+let combo = 4;
+let showHint = true;
+let reviewMode = false;
+let time = 0;
+let debris = [];
+let toasts = [];
+let stack = [];
+const pool = createParticlePool(80);
+
+function rebuild(count) {
+  floors = count;
+  stack = [{ slab: createBase(), hue: hueFor(baseHue, 0), flash: 0, sp: null, regrow: 0 }];
+  for (let i = 1; i <= count; i++) {
+    const shrink = i <= 4 ? 0 : Math.min(60, (i - 4) * 2);
+    stack.push({
+      slab: { cx: (i % 3 - 1) * 4, cz: ((i + 1) % 3 - 1) * 3, w: 200 - shrink, d: 200 - shrink },
+      hue: hueFor(baseHue, i),
+      flash: 0,
+      sp: null,
+      regrow: 0,
+    });
+  }
+}
+
+function poly(g, pts) {
+  g.beginPath(); g.moveTo(pts[0].sx, pts[0].sy);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].sx, pts[i].sy);
+  g.closePath();
+}
+
+function drawOld(g) {
+  const top = stack[stack.length - 1].slab;
+  const cam = { x: top.cx, z: top.cz, y: stack.length * SLAB_H + SLAB_H / 2 };
+  const P = (x, z, y) => project(x, z, y, K, cam, W / 2, H * 0.58);
+
+  const bgHue = (hueFor(baseHue, floors) + 180) % 360;
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, `hsl(${bgHue},38%,80%)`);
+  gr.addColorStop(1, `hsl(${(bgHue + 28) % 360},42%,93%)`);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,0.28)';
+  for (const c of clouds) {
+    g.beginPath(); g.ellipse(c.x, c.y, c.r * 1.5, c.r * 0.7, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  const drawOldSlab = (s, y0, hue, a = 1, flash = 0) => {
+    const x0 = s.cx - s.w / 2, x1 = s.cx + s.w / 2, z0 = s.cz - s.d / 2, z1 = s.cz + s.d / 2, y1 = y0 + SLAB_H;
+    g.globalAlpha = a;
+    poly(g, [P(x1, z0, y1), P(x1, z1, y1), P(x1, z1, y0), P(x1, z0, y0)]); g.fillStyle = `hsl(${hue},70%,52%)`; g.fill();
+    poly(g, [P(x0, z1, y1), P(x1, z1, y1), P(x1, z1, y0), P(x0, z1, y0)]); g.fillStyle = `hsl(${hue},68%,62%)`; g.fill();
+    poly(g, [P(x0, z0, y1), P(x1, z0, y1), P(x1, z1, y1), P(x0, z1, y1)]); g.fillStyle = `hsl(${hue},72%,${Math.min(96, 72 + flash * 22)}%)`; g.fill();
+    g.strokeStyle = `hsla(${hue},55%,35%,0.28)`; g.lineWidth = 1; g.stroke();
+    g.globalAlpha = 1;
+  };
+
+  const lo = Math.max(0, stack.length - 18);
+  for (let i = lo; i < stack.length; i++) drawOldSlab(stack[i].slab, i * SLAB_H, stack[i].hue, 1, stack[i].flash);
+  const mv = movingAt(top, stack.length, time);
+  if (!reviewMode) drawOldSlab(mv.slab, stack.length * SLAB_H, hueFor(baseHue, stack.length));
+  for (const d of debris) drawOldSlab({ ...d.slab, cx: d.slab.cx + d.dx }, d.y, d.hue, 1 - d.t / 1.1);
+
+  // old UI
+  g.save();
+  g.fillStyle = 'rgba(27,19,64,0.88)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+  rr(g, W - 94, 16, 84, 44, 16); g.fill(); g.stroke();
+  g.fillStyle = '#ffd23f'; g.font = '900 28px sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillText(`${floors}층`, W - 25, 39);
+  if (combo > 0) {
+    g.fillStyle = 'rgba(255,255,255,0.9)'; rr(g, W - 56, 66, 46, 26, 13); g.fill();
+    g.fillStyle = '#7a4dff'; g.font = '900 16px sans-serif'; g.fillText(`x${combo}`, W - 20, 80);
+  }
+  if (showHint) {
+    g.textAlign = 'center'; g.font = '900 34px sans-serif'; g.globalAlpha = 0.35 + 0.25 * Math.sin(time * 5);
+    g.fillStyle = '#fff'; g.fillText('TAP!', W / 2, H - 130);
+  }
+  g.restore();
+}
+
+function drawNew(g) {
+  const top = stack[stack.length - 1].slab;
+  const kUse = reviewMode ? 0.42 : K;
+  const oy = reviewMode ? H * 0.65 : H * 0.58;
+  const cam = { x: top.cx, z: top.cz, y: stack.length * SLAB_H + SLAB_H / 2 };
+  const P = (x, z, y) => project(x, z, y, kUse, cam, W / 2, oy);
+
+  const bgHue = (hueFor(baseHue, floors) + 180) % 360;
+  drawStackBackground(g, W, H, cam.y, bgHue, floors, clouds, time, kUse);
+
+  const lo = reviewMode ? 0 : Math.max(0, stack.length - 20);
+  if (lo === 0) drawPedestal(g, stack[0].slab, P, stack[0].hue);
+  for (let i = lo; i < stack.length; i++) {
+    drawSlabPro(g, stack[i].slab, i * SLAB_H, SLAB_H, stack[i].hue, P, kUse, {
+      flash: stack[i].flash,
+      regrow: stack[i].regrow,
+    });
+  }
+
+  if (!reviewMode) {
+    const mv = movingAt(top, stack.length, time);
+    drawMovingShadow(g, top, mv.slab, stack.length * SLAB_H, P);
+    drawSlabPro(g, mv.slab, stack.length * SLAB_H, SLAB_H, hueFor(baseHue, stack.length), P, kUse);
+  } else {
+    drawReviewCrown(g, top, stack.length * SLAB_H, P, time);
+  }
+
+  for (const d of debris) {
+    drawSlabPro(g, { ...d.slab, cx: d.slab.cx + d.dx }, d.y, SLAB_H, d.hue, P, kUse, { alpha: 1 - d.t / 1.1 });
+  }
+
+  pool.draw(g, (wy) => P(top.cx, top.cz, wy).sy);
+
+  for (const t of toasts) {
+    const k = t.t / 0.8;
+    const pTop = P(top.cx, top.cz, stack.length * SLAB_H);
+    g.save();
+    g.globalAlpha = Math.max(0, Math.min(0.45, (1 - k) * 0.9));
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '900 20px sans-serif'; g.lineWidth = 3; g.strokeStyle = 'rgba(20,14,50,0.45)';
+    const y = pTop.sy - 68 - k * 24;
+    g.strokeText(t.text, W / 2, y);
+    g.fillStyle = '#ffffff';
+    g.fillText(t.text, W / 2, y);
+    g.restore();
+  }
+
+  const bot = drawBadgePill(g, W - 10, 16, `${floors}층`, `최고 ${Math.max(floors, 42)}층`);
+  if (combo > 0) {
+    const col = combo >= 6 ? '#ff79c6' : combo >= 3 ? '#ffd23f' : '#9be0ff';
+    drawChipPill(g, W - 10, bot + 6, `PERFECT x${combo}`, col);
+  }
+  if (showHint && !reviewMode) drawTapPrompt(g, W, H, time);
+}
+
+let last = 0;
+function loop(now) {
+  const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+  last = now;
+  time += dt;
+  for (const c of clouds) { c.x += c.vx * dt; if (c.x < -80) c.x = W + 80; else if (c.x > W + 80) c.x = -80; }
+  for (const s of stack) {
+    if (s.flash > 0) s.flash = Math.max(0, s.flash - dt / 0.45);
+    if (s.regrow > 0) s.regrow = Math.max(0, s.regrow - dt / 0.6);
+  }
+  for (let i = toasts.length - 1; i >= 0; i--) { toasts[i].t += dt; if (toasts[i].t > 0.8) toasts.splice(i, 1); }
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i]; d.t += dt; d.vy += 1200 * dt; d.y -= d.vy * dt; d.dx += d.vx * dt;
+    if (d.t > 1.1) debris.splice(i, 1);
+  }
+  pool.step(dt);
+
+  gOld.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawOld(gOld);
+  gNew.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawNew(gNew);
+  requestAnimationFrame(loop);
+}
+
+rebuild(5);
+requestAnimationFrame(loop);
+
+document.getElementById('g-height').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-h]');
+  if (!b) return;
+  rebuild(Number(b.dataset.h));
+  document.querySelectorAll('#g-height button').forEach((x) => x.classList.toggle('on', x === b));
+});
+
+document.getElementById('btn-perfect').addEventListener('click', () => {
+  combo++;
+  const top = stack[stack.length - 1];
+  top.flash = 1;
+  top.regrow = combo >= 3 ? 1 : 0;
+  pool.emitSparks(W / 2, stack.length * SLAB_H + 10, combo >= 3 ? '#ffd23f' : '#ffffff', 10);
+  toasts.push({ text: 'PERFECT!', t: 0 });
+});
+
+document.getElementById('btn-cut').addEventListener('click', () => {
+  combo = 0;
+  const top = stack[stack.length - 1];
+  debris.push({
+    slab: { cx: top.slab.cx + top.slab.w * 0.45, cz: top.slab.cz, w: 36, d: top.slab.d },
+    y: (stack.length - 1) * SLAB_H, vy: 0, dx: 0, vx: 80, t: 0, hue: top.hue,
+  });
+});
+
+document.getElementById('btn-tap').addEventListener('click', (e) => {
+  showHint = !showHint;
+  e.target.classList.toggle('on', showHint);
+});
+document.getElementById('btn-tap').classList.toggle('on', showHint);
+
+document.getElementById('btn-review').addEventListener('click', (e) => {
+  reviewMode = !reviewMode;
+  e.target.classList.toggle('on', reviewMode);
+});
+</script>
+</body>
+</html>

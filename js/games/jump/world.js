@@ -22,8 +22,8 @@ export const JUMP_BUFFER_SEC = 0.12;   // press just before landing still counts
 export const SPRING_V = 730;           // spring pad bounce: peak ~190px (~2x a single jump), no energy cost
 export const SPRING_PAD_HALF = 20;     // the pad is the centre 40px of a spring platform
 export const SPRING_START_Y = 400;     // 10m
-export const ICE_ACCEL = 150;          // px/s^2 while on ice (낮을수록 출발이 느리고 미끄러움; 이전 260)
-export const ICE_DECEL = 40;           // px/s^2 sliding to a stop on ice (낮을수록 오래 미끄러짐; 이전 90, 최고 속도에서 약 380px 미끄러짐)
+export const ICE_ACCEL = 120;          // px/s^2 while on ice (낮을수록 출발이 느리고 미끄러움; 이전 260)
+export const ICE_DECEL = 28;           // px/s^2 sliding to a stop on ice (낮을수록 오래 미끄러짐; 이전 90, 최고 속도에서 약 380px 미끄러짐)
 export const BELT_SPEED = 70;          // px/s conveyor push
 export const CRUMBLE_SEC = 0.5;        // standing time before a crumble platform falls
 export const WIND_SPEED = 45;          // px/s horizontal push inside a wind zone
@@ -470,9 +470,9 @@ export function stepPlayer(state, input, dt, platforms, env = {}) {
   // spikes
   if (s.invincible <= 0) {
     for (const p of platforms) {
-      if (p.type !== 'spike') continue;
+      if (p.type !== 'spike' || p.off) continue;   // p.off: a hazard that is switched off right now (obby lasers)
       if (s.x + PLAYER_HALF_W > p.x + 3 && s.x - PLAYER_HALF_W < p.x + p.w - 3 &&
-          s.y < p.y + SPIKE_H && s.y + PLAYER_H > p.y) {
+          s.y < p.y + (p.h ?? SPIKE_H) && s.y + PLAYER_H > p.y) {   // p.h: taller hazards (obby; the jump map has none)
         s.invincible = INVINCIBLE_SEC;
         s.onGround = false;
         s.ground = null;

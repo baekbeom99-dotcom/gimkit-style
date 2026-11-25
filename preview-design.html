@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사부작스쿨 — 캔버스 디자인 테스트 버전 (Before / After)</title>
+<style>
+  :root {
+    --bg: #130d2e;
+    --surface: #211850;
+    --surface-2: #2d2268;
+    --border: rgba(255,255,255,0.14);
+    --text: #f5f3ff;
+    --muted: #c2b9ea;
+    --accent: #ffd23f;
+    --green: #3fd04a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    padding: 20px 16px 36px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0; font-size: 24px; font-weight: 900; color: var(--accent); }
+  .sub { margin: 0; font-size: 14px; color: var(--muted); }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.04);
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+  .glab { font-size: 12px; font-weight: 800; color: var(--muted); margin-right: 4px; }
+  button {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: transform .1s, background .15s, border-color .15s;
+  }
+  button:hover { background: #3b2d86; }
+  button:active { transform: translateY(1px); }
+  button.fx {
+    background: #1c6e2f;
+    border-color: rgba(255,255,255,0.22);
+  }
+  button.fx:hover { background: #176929; }
+  button.on, button.fx.on {
+    background: var(--accent);
+    color: #1b1340;
+    border-color: #fff6cc;
+  }
+  .boards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 360px));
+    justify-content: center;
+    gap: 24px;
+  }
+  @media (max-width: 760px) {
+    .boards { grid-template-columns: minmax(280px, 360px); }
+  }
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .board-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+  .board-head h2 { margin: 0; font-size: 16px; font-weight: 800; }
+  .tag {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    color: var(--muted);
+  }
+  .tag.new { background: rgba(63,208,74,0.22); color: #8ef576; }
+  canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 360 / 640;
+    display: block;
+    border-radius: 18px;
+    border: 2px solid var(--border);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+    background: #1b1340;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>캔버스 내부 디자인 테스트 버전 (점프맵 · 못깨는 타워)</h1>
+    <p class="sub">기존(Before)과 개선(After) 렌더링을 나란히 비교하고 상태별 연출을 미리 테스트할 수 있습니다.</p>
+  </header>
+
+  <div class="toolbar" role="region" aria-label="미리보기 제어">
+    <div class="group" id="g-theme">
+      <span class="glab">배경</span>
+      <button type="button" data-m="0" class="on">맑은 하늘</button>
+      <button type="button" data-m="45">노을</button>
+      <button type="button" data-m="90">밤하늘</button>
+      <button type="button" data-m="150">우주</button>
+    </div>
+    <div class="group" id="g-pose">
+      <span class="glab">캐릭터</span>
+      <button type="button" data-pose="idle" class="on">대기</button>
+      <button type="button" data-pose="move">이동(꾸물꾸물)</button>
+      <button type="button" data-pose="up">점프 상승</button>
+      <button type="button" data-pose="fall">급낙하</button>
+      <button type="button" data-pose="dead">피격(X)</button>
+    </div>
+    <div class="group">
+      <span class="glab">효과 테스트</span>
+      <button type="button" class="fx" id="btn-dust">착지 먼지</button>
+      <button type="button" class="fx" id="btn-spark">스파크/점프</button>
+      <button type="button" class="fx" id="btn-crumble">무너짐 토글</button>
+    </div>
+  </div>
+
+  <div class="boards">
+    <section class="board">
+      <div class="board-head">
+        <h2>Before (현재 게임)</h2>
+        <span class="tag">기존 도형·이모지</span>
+      </div>
+      <canvas id="cv-before" width="360" height="640"></canvas>
+    </section>
+
+    <section class="board">
+      <div class="board-head">
+        <h2>After (테스트 버전)</h2>
+        <span class="tag new">신규 canvas-fx 적용</span>
+      </div>
+      <canvas id="cv-after" width="360" height="640"></canvas>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { drawBackground } from './js/games/jump/themes.js';
+import {
+  rr, drawBadgePill, drawBannerCard, drawCharacter, drawPlatformPro,
+  drawPickupPro, createParticlePool, drawFlagIcon, drawChipPill,
+} from './js/games/common/canvas-fx.js';
+
+const W = 360, H = 640;
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+const cvBefore = document.getElementById('cv-before');
+const cvAfter = document.getElementById('cv-after');
+for (const cv of [cvBefore, cvAfter]) {
+  cv.width = W * dpr;
+  cv.height = H * dpr;
+}
+const gOld = cvBefore.getContext('2d');
+const gNew = cvAfter.getContext('2d');
+
+const state = {
+  meters: 0,
+  pose: 'idle',
+  crumbleActive: false,
+  crumbleT: 0,
+  springT: 0,
+  squash: 0,
+  time: 0,
+};
+
+const pool = createParticlePool(80);
+const oldRings = [];
+const newRings = [];
+
+// Shared showcase layout (kept below top HUD/banner zone so nothing overlaps)
+const plats = [
+  { x: 0, y: 0, w: 360, type: 'static', surface: 'normal' }, // ground
+  { x: 24, y: 84, w: 92, type: 'static', surface: 'normal', feature: 'spring', springT: 0 },
+  { x: 224, y: 108, w: 96, type: 'static', surface: 'ice' },
+  { x: 244, y: 164, w: 94, type: 'static', surface: 'conveyor', belt: 1 },
+  { x: 34, y: 205, w: 88, type: 'static', surface: 'crumble', crumbleT: 0 },
+  { x: 146, y: 252, w: 86, type: 'moving', baseX: 146 },
+  { x: 248, y: 298, w: 48, type: 'spike' },
+  { x: 26, y: 312, w: 120, rest: true, section: 2, feature: 'checkpoint', reached: true },
+  { x: 204, y: 348, w: 128, rest: true, section: 7, feature: 'goal' },
+];
+const pickups = [
+  { x: 96, y: 142, type: 'energy' },
+  { x: 200, y: 196, type: 'mystery' },
+];
+
+const toScreenY = (wy) => H - 40 - wy;
+
+// Legacy Before drawing (faithful to current jump/index.js & obby/render.js)
+function drawOldScene(g, t) {
+  const camY = state.meters * 40 - 320;
+  drawBackground(g, W, H, camY, t);
+
+  for (const p of plats) {
+    const sy = toScreenY(p.y);
+    if (p.type === 'spike') {
+      g.fillStyle = '#e8384f';
+      const n = Math.max(2, Math.round(p.w / 12)), tw = p.w / n;
+      for (let s = 0; s < n; s++) {
+        g.beginPath(); g.moveTo(p.x + s * tw, sy); g.lineTo(p.x + s * tw + tw / 2, sy - 16); g.lineTo(p.x + (s + 1) * tw, sy); g.closePath(); g.fill();
+      }
+      g.fillStyle = '#7a1730'; g.fillRect(p.x, sy, p.w, 5);
+      continue;
+    }
+    if (p.rest) {
+      g.fillStyle = p.section === 2 ? '#4ccf5a' : '#e8384f';
+      rr(g, p.x, sy, p.w, 18, 7); g.fill();
+      const cx = p.x + p.w / 2;
+      if (p.feature === 'checkpoint') {
+        g.fillStyle = '#c99a1c'; g.fillRect(cx + 32, sy - 52, 3, 54);
+        g.fillStyle = '#3ccf5a'; g.beginPath(); g.moveTo(cx + 35, sy - 50); g.lineTo(cx + 60, sy - 41); g.lineTo(cx + 35, sy - 30); g.closePath(); g.fill();
+      } else if (p.feature === 'goal') {
+        g.fillStyle = '#c99a1c'; g.fillRect(cx - 32, sy - 52, 3, 54);
+        g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(cx - 29, sy - 50); g.lineTo(cx - 4, sy - 41); g.lineTo(cx - 29, sy - 30); g.closePath(); g.fill();
+        g.font = '26px sans-serif'; g.textAlign = 'center'; g.fillText('🏆', cx + 22, sy - 6);
+      }
+      continue;
+    }
+    if (p.w >= W) {
+      g.fillStyle = '#8a5a2b'; g.fillRect(p.x, sy, p.w, 80);
+      g.fillStyle = '#4ccf5a'; g.fillRect(p.x, sy, p.w, 10);
+      continue;
+    }
+    if (p.type === 'moving') {
+      g.fillStyle = '#2d9cdb'; rr(g, p.x, sy, p.w, 16, 8); g.fill();
+      g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center';
+      g.fillText('◀ ▶', p.x + p.w / 2, sy + 13);
+    } else if (p.surface === 'ice') {
+      g.fillStyle = '#8fd0f2'; rr(g, p.x, sy, p.w, 16, 8); g.fill();
+      g.fillStyle = '#e4f6ff'; rr(g, p.x, sy, p.w, 9, 5); g.fill();
+    } else if (p.surface === 'conveyor') {
+      g.fillStyle = '#454b57'; rr(g, p.x, sy, p.w, 16, 8); g.fill();
+      g.fillStyle = '#ffd23f'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center';
+      g.fillText('>>>', p.x + p.w / 2, sy + 12);
+    } else if (p.surface === 'crumble') {
+      g.fillStyle = '#a67b52'; rr(g, p.x, sy, p.w, 16, 6); g.fill();
+      g.fillStyle = '#c9a373'; rr(g, p.x, sy, p.w, 8, 4); g.fill();
+    } else {
+      g.fillStyle = '#8a5a2b'; rr(g, p.x, sy, p.w, 16, 8); g.fill();
+      g.fillStyle = '#4ccf5a'; rr(g, p.x, sy, p.w, 9, 5); g.fill();
+    }
+    if (p.feature === 'spring') {
+      const cx = p.x + p.w / 2;
+      g.fillStyle = '#ffd23f'; rr(g, cx - 15, sy - 3, 30, 5, 2); g.fill();
+      g.fillStyle = '#ff4d4d'; rr(g, cx - 14, sy - 22, 28, 7, 3); g.fill();
+    }
+  }
+
+  for (const it of pickups) {
+    const sy = toScreenY(it.y) + Math.sin(t * 3 + it.x * 0.1) * 4;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = it.type === 'energy' ? '#ffd23f' : '#8b5cf6';
+    g.beginPath(); g.arc(it.x, sy, 14, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = it.type === 'energy' ? '#7a4a00' : '#fff';
+    g.font = 'bold 16px sans-serif';
+    g.fillText(it.type === 'energy' ? '⚡' : '❓', it.x, sy + 1);
+  }
+
+  // old character
+  const charX = state.pose === 'idle' ? 172 : 162;
+  const poseY = state.pose === 'idle' ? toScreenY(0) : state.pose === 'up' ? toScreenY(64) : toScreenY(48);
+  const vy = state.pose === 'up' ? 320 : state.pose === 'fall' ? -420 : 0;
+  const stretch = state.pose === 'idle' ? 1 : 1 + Math.min(0.12, Math.abs(vy) / 5000);
+  g.save();
+  g.translate(charX, poseY);
+  g.scale(1 / stretch, stretch);
+  g.fillStyle = '#ffb02e'; rr(g, -14, -30, 28, 30, 9); g.fill();
+  g.fillStyle = '#ff8a00'; rr(g, -14, -10, 28, 10, 5); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(-5, -20, 5, 0, Math.PI * 2); g.arc(6, -20, 5, 0, Math.PI * 2); g.fill();
+  if (state.pose === 'dead') {
+    g.strokeStyle = '#222'; g.lineWidth = 2;
+    for (const ex of [-5, 6]) { g.beginPath(); g.moveTo(ex - 3, -23); g.lineTo(ex + 3, -17); g.moveTo(ex + 3, -23); g.lineTo(ex - 3, -17); g.stroke(); }
+  } else {
+    g.fillStyle = '#222'; g.beginPath(); g.arc(-3.5, -20, 2.4, 0, Math.PI * 2); g.arc(7.5, -20, 2.4, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+
+  // old pill + banner
+  g.save();
+  g.fillStyle = 'rgba(27,19,64,0.88)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+  rr(g, W - 122, 16, 112, 62, 18); g.fill(); g.stroke();
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillStyle = '#ffd23f'; g.font = '900 30px sans-serif'; g.fillText(`${state.meters + 42}m`, W - 24, 40);
+  g.fillStyle = '#fff'; g.font = 'bold 15px sans-serif'; g.fillText('최고 120m', W - 24, 65);
+  rr(g, 80, 118, 200, 44, 22); g.fillStyle = 'rgba(27,19,64,0.9)'; g.strokeStyle = '#ffd23f'; g.fill(); g.stroke();
+  g.textAlign = 'center'; g.fillStyle = '#fff'; g.font = '900 20px sans-serif'; g.fillText('체크포인트!', 180, 141);
+  g.restore();
+}
+
+function drawNewScene(g, t) {
+  const camY = state.meters * 40 - 320;
+  drawBackground(g, W, H, camY, t);
+
+  // left-edge progress preview
+  g.save();
+  const top = 110, bot = 310, h = bot - top;
+  rr(g, 8, top, 8, h, 4);
+  g.fillStyle = 'rgba(27,19,64,0.55)'; g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.65)'; g.lineWidth = 1.5; g.stroke();
+  g.fillStyle = 'rgba(255,210,63,0.5)';
+  g.fillRect(9, bot - h * 0.65, 6, h * 0.65);
+  drawFlagIcon(g, 20, bot - h * 0.5, 11, '#3ccf5a', true);
+  drawFlagIcon(g, 20, bot - h * 0.85, 11, '#ffd23f', false);
+  const py = bot - h * 0.45;
+  g.fillStyle = '#ffb02e'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+  g.beginPath(); g.arc(12, py, 6, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.restore();
+
+  for (const p of plats) {
+    drawPlatformPro(g, p, toScreenY(p.y), t, { spikeH: 14, springPadHalf: 15, springAnim: 0.3, crumbleSec: 0.65, worldW: W, viewH: H });
+  }
+  for (const it of pickups) {
+    drawPickupPro(g, it, toScreenY(it.y), t, 14);
+  }
+
+  for (const r of newRings) {
+    const k = r.t / 0.45, sy = toScreenY(r.y);
+    g.save();
+    g.globalAlpha = 1 - k;
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 4 * (1 - k) + 1;
+    g.beginPath(); g.ellipse(r.x, sy, 10 + 26 * k, 4 + 8 * k, 0, 0, Math.PI * 2); g.stroke();
+    g.restore();
+  }
+
+  const onG = state.pose === 'idle' || state.pose === 'move';
+  const charX = state.pose === 'move' ? 172 + Math.sin(t * 2.2) * 48 : (onG ? 172 : 162);
+  const facing = state.pose === 'move' ? (Math.cos(t * 2.2) >= 0 ? 1 : -1) : 1;
+  const poseY = onG ? toScreenY(0) : state.pose === 'up' ? toScreenY(64) : toScreenY(48);
+  const vy = state.pose === 'up' ? 320 : state.pose === 'fall' ? -420 : 0;
+  drawCharacter(g, {
+    x: charX,
+    y: poseY,
+    halfW: 12,
+    height: 30,
+    facing,
+    vy,
+    onGround: onG,
+    dead: state.pose === 'dead',
+    squash: state.squash,
+    move: state.pose === 'move' ? 1 : 0,
+    movePhase: t * 16,
+    time: t,
+  });
+
+  pool.draw(g, toScreenY);
+
+  const bottomY = drawBadgePill(g, W - 10, 16, `${state.meters + 42}m`, '최고 120m');
+  const chipBottom = drawChipPill(g, W - 10, bottomY + 6, '점프 120%', '#7dff8a');
+  drawBannerCard(g, W, chipBottom + 10, { text: '체크포인트!', sub: '다음 구간으로 이동', t: (t % 3) + 0.3, dur: 3.4 });
+}
+
+let last = 0;
+function loop(now) {
+  const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+  last = now;
+  state.time += dt;
+  if (state.squash > 0) state.squash = Math.max(0, state.squash - dt * 4);
+  const moving = plats.find((p) => p.type === 'moving');
+  if (moving) moving.x = moving.baseX + Math.sin(state.time * 2) * 28;
+  const springP = plats.find((p) => p.feature === 'spring');
+  if (springP && springP.springT > 0) springP.springT = Math.max(0, springP.springT - dt);
+  const crumb = plats.find((p) => p.surface === 'crumble');
+  if (crumb) {
+    crumb.crumbleT = state.crumbleActive ? ((state.time * 0.7) % 0.65) : 0;
+    if (state.crumbleActive && Math.floor(state.time * 12) !== Math.floor((state.time - dt) * 12)) {
+      pool.emitChips(crumb.x + crumb.w / 2, crumb.y, '#b37148', 2);
+    }
+  }
+  for (let i = newRings.length - 1; i >= 0; i--) {
+    newRings[i].t += dt;
+    if (newRings[i].t >= 0.45) newRings.splice(i, 1);
+  }
+  pool.step(dt);
+
+  gOld.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawOldScene(gOld, state.time);
+  gNew.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawNewScene(gNew, state.time);
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.getElementById('g-theme').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-m]');
+  if (!b) return;
+  state.meters = Number(b.dataset.m);
+  document.querySelectorAll('#g-theme button').forEach((x) => x.classList.toggle('on', x === b));
+});
+
+document.getElementById('g-pose').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-pose]');
+  if (!b) return;
+  state.pose = b.dataset.pose;
+  if (state.pose === 'idle') state.squash = 1;
+  document.querySelectorAll('#g-pose button').forEach((x) => x.classList.toggle('on', x === b));
+});
+
+document.getElementById('btn-dust').addEventListener('click', () => {
+  state.squash = 1;
+  pool.emitDust(state.pose === 'idle' ? 172 : 162, 0, 7);
+});
+document.getElementById('btn-spark').addEventListener('click', () => {
+  const x = state.pose === 'idle' ? 172 : 162;
+  const y = state.pose === 'idle' ? 0 : 64;
+  newRings.push({ x, y, t: 0 });
+  pool.emitSparks(x, y, '#ffd23f', 10);
+  const sp = plats.find((p) => p.feature === 'spring');
+  if (sp) sp.springT = 0.3;
+});
+document.getElementById('btn-crumble').addEventListener('click', (e) => {
+  state.crumbleActive = !state.crumbleActive;
+  e.target.classList.toggle('on', state.crumbleActive);
+});
+</script>
+</body>
+</html>

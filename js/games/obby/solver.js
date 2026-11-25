@@ -29,15 +29,26 @@
 // the vertical band a transition can reach are simulated. The test suite additionally memoises results in
 // tests/fixtures (tests/obby-cache.mjs, keyed by a hash of this file + the physics + the platform data).
 //
+// Hazards (hazards.js): lava / laser / saw / crusher are `type:'spike'` entries, so touching one = 'hit' = fail. The
+// dynamic ones (laser on/off, saw patrol, crusher drop) are pure functions of the world clock and are advanced per
+// tick exactly like moving platforms (so the jitter margins, which run the world clock earlier / later, apply to
+// them too). All cycle lengths of a section (movers 2pi/speed, lasers / crushers `period`) should divide the longest
+// one: then the node key bins the clock inside that period (finely when hazards are timed); otherwise it falls back
+// to 0.25 s bins. Platforms with `dropEdge: true` also get 'drop' macros: walk off the edge, fall, then press the air
+// jump `dj` ticks into the fall (the "jump while falling" mechanic; the fall may be MAX_DROP_FALL deep).
+//
 // Robust mode (solveSectionRobust): a transition only counts when it still lands on the same platform with
 // the jump press delayed / advanced by `timingMs`, the start x shifted by +-`xPx`, and (when used) the air
 // jump press and the air-control release shifted by +-`timingMs`. "Advanced" is modelled by running the
 // world clock (moving platforms, crumble time) that much earlier; "delayed" by standing still first.
 import { stepPlayer, createPlayer } from '../jump/world.js';
 import { SECTION_H, sectionPlatforms } from './sections.js';
+import { applyHazard, isDynamicHazard, hazardCycle } from './hazards.js';
 
 export const DT = 1 / 60;
 const XBIN = 20, VXBIN = 40, PHASE_BINS = 8, CRBIN = 0.1;
+const MAX_DROP_FALL = 230;    // a drop macro may fall this deep (the game's fall limit is 360px under the highest point)
+const DROP_DJ = [8, 13, 19, 26, 34];
 const MAX_AIR_TICKS = 180;
 const MAX_DROP = 120;         // a transition fails once the player is 120px below where it started
 const CLIMB_PX_PER_SEC = 450; // optimistic climb speed for the A* heuristic
@@ -53,6 +64,8 @@ const AIR_POLICIES = (() => {
   return out;
 })();
 const DJ_TICKS = [null, 12, 20, 28];
+// drop macro air policies (direction signs relative to the walk-off direction)
+const DROP_POLICIES = [{ d1: 1, h: Infinity, d2: 1 }, { d1: 0, h: Infinity, d2: 0 }, { d1: 1, h: 10, d2: 0 }, { d1: 1, h: 22, d2: 0 }, { d1: -1, h: Infinity, d2: -1 }, { d1: 0, h: 14, d2: 1 }];
 const GROUND_MOVES = [8, 24, 60];  // walk until moved this many px (or 5 s): works against belts / wind
 const MAX_WALK_TICKS = 300;
 const GROUND_WAITS = [8, 24, 50];
@@ -64,17 +77,25 @@ const cache = new Map();
 function makeCtx(platforms, env, startIndex, goalIndex) {
   const plats = platforms.map((p, i) => ({ ...p, _i: i }));
   const movers = plats.filter((p) => p.type === 'moving');
+  const hzs = plats.filter(isDynamicHazard);
+  // every cycle of the section (movers share a speed; hazards have their own): single-period binning only when
+  // all of them divide the longest one
+  const cycles = [...movers.map((p) => (2 * Math.PI) / p.speed), ...hzs.map(hazardCycle)];
+  const period = cycles.length ? Math.max(...cycles) : 0;
   const speeds = [...new Set(movers.map((p) => p.speed))];
-  const period = movers.length ? (2 * Math.PI) / speeds[0] : 0;
+  const aligned = cycles.every((c) => Math.abs(period / c - Math.round(period / c)) < 1e-3);
+  const timed = cycles.length > 0;
+  const phaseBins = hzs.length ? Math.max(PHASE_BINS, Math.ceil(period / 0.1)) : PHASE_BINS;
   const crumbleBit = new Map();
   plats.forEach((p, i) => { if (p.type !== 'spike' && p.surface === 'crumble') crumbleBit.set(i, crumbleBit.size); });
   const solids = plats.filter((p) => p.type !== 'spike');
+  const hasDrop = plats.some((p) => p.dropEdge);
   const floorY = Math.min(...solids.map((p) => p.y)) - 60;
   const hasWind = !!(env && env.wind && env.wind.some((z) => z.vx));
   return { plats, work: plats.map((p) => ({ ...p })), movers, period,
     localCache: new Map(),
     sinBuf: new Float64Array(movers.length), cosBuf: new Float64Array(movers.length),
-    sinStep: movers.map((m) => Math.sin(m.speed * DT)), cosStep: movers.map((m) => Math.cos(m.speed * DT)), multiSpeed: speeds.length > 1, crumbleBit, floorY, env: env || {}, hasWind, startIndex, goalIndex, goalY: plats[goalIndex].y };
+    sinStep: movers.map((m) => Math.sin(m.speed * DT)), cosStep: movers.map((m) => Math.cos(m.speed * DT)), multiSpeed: !aligned, timed, hzs, phaseBins, hasDrop, crumbleBit, floorY, env: env || {}, hasWind, startIndex, goalIndex, goalY: plats[goalIndex].y };
 }
 
 function moverX(p, t) { return p.baseX + Math.sin(t * p.speed + p.phase) * p.range; }
@@ -84,11 +105,14 @@ function resetWork(ctx, t, mask, startPi, cr) {
   for (let i = 0; i < plats.length; i++) {
     const p = plats[i], w = work[i];
     w.x = p.type === 'moving' ? moverX(p, t) : p.x;
+    w.y = p.y;
+    w.off = false;
     w.dx = 0;
     w.crumbleT = i === startPi ? cr : 0;
     const bit = ctx.crumbleBit.get(i);
     w.gone = bit !== undefined && ((mask >>> bit) & 1) === 1;
   }
+  for (const h of ctx.hzs) applyHazard(work[h._i], t);
 }
 
 function restorePlayer(ctx, n) {
@@ -106,8 +130,8 @@ function nodeKey(ctx, n) {
   const p = ctx.plats[n.pi];
   const rel = p.type === 'moving' ? n.x - moverX(p, n.t) : n.x;
   let ph = 0;
-  if (ctx.movers.length) {
-    ph = ctx.multiSpeed ? Math.floor(n.t / 0.25) : Math.floor((((n.t % ctx.period) + ctx.period) % ctx.period) / ctx.period * PHASE_BINS);
+  if (ctx.timed) {
+    ph = ctx.multiSpeed ? Math.floor(n.t / 0.25) : Math.floor((((n.t % ctx.period) + ctx.period) % ctx.period) / ctx.period * ctx.phaseBins);
   }
   // the crumbled-platform mask is NOT part of the key: merging can only lose routes (never invent one)
   return `${n.kind}${n.pi}|${Math.round(rel / XBIN)}|${Math.round(n.vx / VXBIN)}|${ph}|${Math.round(n.cr / CRBIN)}`;
@@ -134,14 +158,19 @@ function simulate(ctx, n, macro, jit) {
     sn[k] = Math.sin(a); cs[k] = Math.cos(a);
   }
   const start = work[n.pi];
-  const ground = macro.type === 'ground';
-  const walkTicks = ground ? (macro.dist ? MAX_WALK_TICKS : macro.ticks) : 0;
+  const isDrop = macro.type === 'drop';
+  const ground = macro.type === 'ground' || isDrop;
+  const walkTicks = ground ? (macro.dist || isDrop ? MAX_WALK_TICKS : macro.ticks) : 0;
+  const maxDrop = isDrop ? MAX_DROP_FALL : MAX_DROP;
+  let dropK = 0;                       // drop macro: ticks since the feet left the platform
   const x0 = s.x;
   const total = ground ? walkTicks + MAX_AIR_TICKS : MAX_AIR_TICKS + delay;
   const h = macro.h + (jit ? jit.hShift || 0 : 0);
   const dj = macro.dj == null ? null : macro.dj + (jit ? jit.djShift || 0 : 0);
   let airborne = false; // ground macro: walked off an edge / the platform crumbled -> now falling
   for (let i = 0; i < total; i++) {
+    const tNow = worldT0 + (i + 1) * DT;
+    for (let k = 0; k < ctx.hzs.length; k++) applyHazard(work[ctx.hzs[k]._i], tNow);
     for (let k = 0; k < nm; k++) {
       const m = movers[k], w = work[m._i];
       const s1 = sn[k] * ctx.cosStep[k] + cs[k] * ctx.sinStep[k];
@@ -153,7 +182,14 @@ function simulate(ctx, n, macro, jit) {
     }
     let dir = 0, jump = false;
     if (macro.type === 'ground') dir = macro.dir;
-    else {
+    else if (isDrop) {
+      if (!airborne) dir = macro.dir;
+      else {
+        dir = dropK < h ? macro.d1 : macro.d2;
+        if (dj !== null && dropK === dj) jump = true;
+        dropK++;
+      }
+    } else {
       const k = i - delay;
       if (k < 0) dir = 0;
       else {
@@ -169,7 +205,7 @@ function simulate(ctx, n, macro, jit) {
       if (v === 'hit') hit = true; else if (v === 'sprang') sprang = true; else if (v === 'landed') landed = true;
     }
     if (hit) return { end: 'fail' };
-    if (s.y < ctx.floorY || s.y < n.y - MAX_DROP) return { end: 'fail' };
+    if (s.y < ctx.floorY || s.y < n.y - maxDrop) return { end: 'fail' };
     const t = n.t + (i + 1) * DT;
     if (ground && !airborne) {
       if (s.onGround && s.ground !== start) {
@@ -177,6 +213,10 @@ function simulate(ctx, n, macro, jit) {
         return { end: 'land', node: snapshot(s, s.ground._i, t, maskAfterLeaving(ctx, n), 0, 'A') };
       }
       if (!s.onGround && !sprang) { airborne = true; continue; }
+      if (isDrop) {                    // keep walking until the edge (a world wall ends the try)
+        if (s.x <= 11.01 || s.x >= 348.99) return { end: 'fail' };
+        continue;
+      }
       if (i + 1 >= walkTicks || (macro.dist && Math.abs(s.x - x0) >= macro.dist)) return { end: 'land', node: snapshot(s, n.pi, t, n.mask, start.crumbleT || 0, 'A') };
       continue;
     }
@@ -203,7 +243,7 @@ function localPlatforms(ctx, y) {
   let arr = ctx.localCache.get(key);
   if (!arr) {
     const lo = key * 10 - BAND_BELOW, hi = key * 10 + 10 + BAND_ABOVE;
-    arr = ctx.work.filter((p) => p.y >= lo && p.y <= hi);
+    arr = ctx.work.filter((p) => ctx.plats[p._i].y >= lo && ctx.plats[p._i].y <= hi);
     ctx.localCache.set(key, arr);
   }
   return arr;
@@ -223,8 +263,13 @@ function macrosFor(ctx, n) {
   if (n.kind === 'A') {
     for (const d of [-1, 1]) for (const dist of GROUND_MOVES) out.push({ type: 'ground', dir: d, dist });
     const p = ctx.plats[n.pi];
-    if (ctx.movers.length || p.surface === 'ice' || p.surface === 'conveyor' || ctx.hasWind) {
+    if (ctx.timed || p.surface === 'ice' || p.surface === 'conveyor' || ctx.hasWind) {
       for (const ticks of GROUND_WAITS) out.push({ type: 'ground', dir: 0, ticks });
+    }
+    if (ctx.hasDrop && p.dropEdge && !ctx.noDrop) {
+      for (const d of [-1, 1]) {
+        for (const pol of DROP_POLICIES) for (const dj of DROP_DJ) out.push({ type: 'drop', dir: d, d1: pol.d1 * d, h: pol.h, d2: pol.d2 * d, dj });
+      }
     }
   }
   return out;
@@ -317,7 +362,7 @@ function describePath(ctx, goal, t0) {
   for (let n = goal; n && n.parent; n = n.parent) {
     const m = n.macro;
     steps.push({
-      action: m.type === 'ground' ? (m.dir ? (m.dir < 0 ? 'walkLeft' : 'walkRight') : 'wait') : m.type === 'jump' ? 'jump' : 'springAir',
+      action: m.type === 'ground' ? (m.dir ? (m.dir < 0 ? 'walkLeft' : 'walkRight') : 'wait') : m.type === 'jump' ? 'jump' : m.type === 'drop' ? 'drop' : 'springAir',
       from: n.parent.pi, to: n.pi, t: +(n.parent.t - t0).toFixed(3), x: +n.parent.x.toFixed(1),
       macro: { ...m }, land: { x: +n.x.toFixed(1), y: n.y, t: +(n.t - t0).toFixed(3) },
     });
@@ -327,7 +372,7 @@ function describePath(ctx, goal, t0) {
 
 function startTimes(ctx, opts) {
   if (opts.startTimes) return opts.startTimes;
-  if (!ctx.movers.length || opts.mode === 'any') return [0];
+  if (!ctx.timed || opts.mode === 'any') return [0];
   const k = opts.phaseSamples ?? 3;
   const T = ctx.multiSpeed ? 6 : ctx.period;
   return Array.from({ length: k }, (_, i) => (T * i) / k);
@@ -337,6 +382,7 @@ function startTimes(ctx, opts) {
 // opts: { env, jitter:{timingMs,xPx}, startX, startTimes:[s], phaseSamples, maxNodes, maxTime }
 export function solvePlatforms(platforms, { startIndex = 0, goalIndex = 1, ...opts } = {}) {
   const ctx = makeCtx(platforms, opts.env, startIndex, goalIndex);
+  ctx.noDrop = !!opts.noDrop;   // test hook: forbid the 'drop' macros (proves the mid-fall air jump is needed)
   const times = startTimes(ctx, opts);
   let worst = 0, sum = 0, best = null, expanded = 0;
   for (const t0 of times) {
@@ -358,7 +404,7 @@ export function solvePlatforms(platforms, { startIndex = 0, goalIndex = 1, ...op
 }
 
 function cacheKey(pattern, opts) {
-  return JSON.stringify([pattern.platforms, opts.env || null, opts.jitter || null, opts.mode || 'fastest', opts.startTimes || null, opts.phaseSamples || null, opts.maxNodes || null, opts.maxTime || null],
+  return JSON.stringify([pattern.platforms, opts.env || null, opts.jitter || null, opts.mode || 'fastest', opts.startTimes || null, opts.phaseSamples || null, opts.maxNodes || null, opts.maxTime || null, opts.noDrop || null],
     (k, v) => (v === Infinity ? 'Inf' : v === -Infinity ? '-Inf' : v));
 }
 

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사부작스쿨 — 2D 탑쌓기 테스트 버전 (Before / After)</title>
+<style>
+  :root {
+    --bg: #130d2e;
+    --surface: #211850;
+    --surface-2: #2d2268;
+    --border: rgba(255,255,255,0.14);
+    --text: #f5f3ff;
+    --muted: #c2b9ea;
+    --accent: #ffd23f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    padding: 20px 16px 36px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0; font-size: 24px; font-weight: 900; color: var(--accent); }
+  .sub { margin: 0; font-size: 14px; color: var(--muted); }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+  }
+  .group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.04);
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+  .glab { font-size: 12px; font-weight: 800; color: var(--muted); margin-right: 4px; }
+  button {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: transform .1s, background .15s;
+  }
+  button:hover { background: #3b2d86; }
+  button:active { transform: translateY(1px); }
+  button.fx { background: #1c6e2f; border-color: rgba(255,255,255,0.22); }
+  button.fx:hover { background: #176929; }
+  button.on, button.fx.on { background: var(--accent); color: #1b1340; border-color: #fff6cc; }
+  .boards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 360px));
+    justify-content: center;
+    gap: 24px;
+  }
+  @media (max-width: 760px) {
+    .boards { grid-template-columns: minmax(280px, 360px); }
+  }
+  .board { display: flex; flex-direction: column; gap: 8px; }
+  .board-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+  .board-head h2 { margin: 0; font-size: 16px; font-weight: 800; }
+  .tag { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,0.12); color: var(--muted); }
+  .tag.new { background: rgba(63,208,74,0.22); color: #8ef576; }
+  canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 360 / 640;
+    display: block;
+    border-radius: 18px;
+    border: 2px solid var(--border);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+    background: #1b1340;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>2D 탑쌓기 테스트 버전 (Before / After)</h1>
+    <p class="sub">일반/얼음/마법 벽돌 베벨 질감, 그라데이션 낙하 가이드, 결승선 게이트, NEXT·정보 카드를 비교해 보세요.</p>
+  </header>
+
+  <div class="toolbar" role="region" aria-label="미리보기 제어">
+    <div class="group" id="g-sky">
+      <span class="glab">하늘</span>
+      <button type="button" data-m="0" class="on">낮 (0m)</button>
+      <button type="button" data-m="28">노을 (28m)</button>
+      <button type="button" data-m="55">밤 (55m)</button>
+    </div>
+    <div class="group">
+      <span class="glab">연출</span>
+      <button type="button" class="fx" id="btn-hold">결승선 유지 토글</button>
+      <button type="button" class="fx" id="btn-magic">마법 설명 토글</button>
+    </div>
+  </div>
+
+  <div class="boards">
+    <section class="board">
+      <div class="board-head">
+        <h2>Before (현재 게임)</h2>
+        <span class="tag">단색 벽돌·사각 가이드</span>
+      </div>
+      <canvas id="cv-before" width="360" height="640"></canvas>
+    </section>
+
+    <section class="board">
+      <div class="board-head">
+        <h2>After (테스트 버전)</h2>
+        <span class="tag new">베벨·유리얼음·게이트</span>
+      </div>
+      <canvas id="cv-after" width="360" height="640"></canvas>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { SHAPES, cellOffsets, cellsSize, splitInfo, infoAlpha } from './js/games/tower2d/logic.js';
+import {
+  skyAt, drawSkyPro, cellsPath, drawNormalBrickPro, drawIceBrickPro, drawGuidePro, drawFinishLinePro, drawNextCard, drawInfoCard,
+} from './js/games/tower2d/render.js';
+import { drawBadgePill, rr } from './js/games/common/canvas-fx.js';
+
+const W = 360, H = 640, CELL = 24, OUTLINE = '#2a1f4a';
+const COLORS = { I: '#45d4ff', O: '#ffd43b', T: '#c38bff', S: '#5ee38a', Z: '#ff6b8b', J: '#5b8cff', L: '#ffa24a' };
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+const cvBefore = document.getElementById('cv-before');
+const cvAfter = document.getElementById('cv-after');
+for (const cv of [cvBefore, cvAfter]) { cv.width = W * dpr; cv.height = H * dpr; }
+const gOld = cvBefore.getContext('2d');
+const gNew = cvAfter.getContext('2d');
+
+const clouds = [];
+for (let i = 0; i < 8; i++) clouds.push({ x: i * 55, y: 120 + i * 95, s: 0.7 + (i % 3) * 0.25, v: 5 + i });
+const stars = [];
+for (let i = 0; i < 36; i++) stars.push({ x: (i * 53) % W, y: (i * 89) % 800, r: i % 4 === 0 ? 2 : 1 });
+
+let skyM = 0;
+let holdOn = true;
+let magicOn = true;
+let time = 0;
+
+function makeBrick(shape, x, y, angle = 0, extra = {}) {
+  const cells = SHAPES[shape];
+  return { shape, x, y, angle, cell: CELL, cells, local: cellOffsets(cells, CELL), ...extra };
+}
+
+const placed = [
+  makeBrick('O', 142, -24),
+  makeBrick('L', 206, -24),
+  makeBrick('T', 175, -60, 0, { ice: true }),
+  makeBrick('I', 132, -96, 0, { magic: { kind: 'light' } }),
+];
+const falling = makeBrick('S', 180, -250);
+
+function drawPlatform(g) {
+  const x0 = 100, y0 = 0, pw = 160, ph = 52;
+  g.fillStyle = '#5b4a7a';
+  g.beginPath(); g.moveTo(x0 + 10, ph - 2); g.lineTo(x0 + pw - 10, ph - 2);
+  g.lineTo(W / 2 + 24, ph + 130); g.lineTo(W / 2 - 28, ph + 130); g.closePath(); g.fill();
+  const gr = g.createLinearGradient(0, y0, 0, ph);
+  gr.addColorStop(0, '#9a7a58'); gr.addColorStop(1, '#6e5238');
+  g.fillStyle = gr; rr(g, x0, y0, pw, ph, 5); g.fill();
+  g.fillStyle = '#6bd36b'; g.fillRect(x0 + 2, y0, pw - 4, 5);
+  g.strokeStyle = OUTLINE; g.lineWidth = 2; rr(g, x0, y0, pw, ph, 5); g.stroke();
+}
+
+function drawOld(g) {
+  const camY = -Math.round(H * 0.8) - skyM * 24;
+  const s = skyAt(skyM);
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, s.top); gr.addColorStop(1, s.bot);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.fillStyle = `rgba(255,255,255,${0.85 - 0.55 * s.night})`;
+  for (const c of clouds) {
+    const cx = ((c.x + time * c.v) % (W + 160)) - 80;
+    const cy = ((c.y) % 500) + 40;
+    g.beginPath(); g.arc(cx, cy, 18 * c.s, 0, Math.PI * 2); g.fill();
+  }
+
+  g.save();
+  g.translate(0, H * 0.8);
+  drawPlatform(g);
+  // finish line
+  g.strokeStyle = holdOn ? '#ffd43b' : '#fff'; g.lineWidth = 3; g.setLineDash([12, 8]);
+  g.beginPath(); g.moveTo(0, -180); g.lineTo(W, -180); g.stroke(); g.setLineDash([]);
+  // guide
+  g.fillStyle = 'rgba(255,255,255,0.16)';
+  g.fillRect(falling.x - 36, falling.y + 24, 72, 220);
+
+  for (const b of [...placed, falling]) {
+    g.save(); g.translate(b.x, b.y);
+    const half = (CELL - 1) / 2;
+    if (b.magic) { g.strokeStyle = 'rgba(255,215,64,0.7)'; g.lineWidth = 8; cellsPath(g, b.local, CELL, 0); g.stroke(); }
+    g.fillStyle = b.ice ? '#c8f0ff' : COLORS[b.shape];
+    cellsPath(g, b.local, CELL, 0); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.45)';
+    g.beginPath(); for (const [lx, ly] of b.local) g.rect(lx - half + 3, ly - half + 3, CELL - 9, 4); g.fill();
+    g.strokeStyle = OUTLINE; g.lineWidth = 2; cellsPath(g, b.local, CELL, 0); g.stroke();
+    g.restore();
+  }
+  g.restore();
+
+  // old UI
+  g.save();
+  g.fillStyle = 'rgba(27,19,64,0.88)'; g.strokeStyle = '#fff'; g.lineWidth = 3;
+  rr(g, W - 110, 16, 100, 62, 18); g.fill(); g.stroke();
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillStyle = '#ffd23f'; g.font = '900 30px sans-serif'; g.fillText(`${(skyM + 6.4).toFixed(1)}m`, W - 22, 40);
+  g.fillStyle = '#fff'; g.font = 'bold 15px sans-serif'; g.fillText('STAGE 1', W - 22, 65);
+  rr(g, 10, 16, 68, 62, 14); g.fillStyle = 'rgba(27,19,64,0.8)'; g.lineWidth = 2; g.fill(); g.stroke();
+  g.fillStyle = '#fff'; g.font = 'bold 11px sans-serif'; g.textAlign = 'center'; g.fillText('NEXT', 44, 26);
+  g.fillStyle = COLORS.T; g.fillRect(28, 38, 11, 11); g.fillRect(39, 38, 11, 11); g.fillRect(50, 38, 11, 11); g.fillRect(39, 49, 11, 11);
+  g.restore();
+}
+
+function drawNew(g) {
+  const camY = -Math.round(H * 0.8) - skyM * 24;
+  drawSkyPro(g, W, H, camY, 0, 24, clouds, stars, time);
+
+  g.save();
+  g.translate(0, H * 0.8);
+  drawPlatform(g);
+  drawFinishLinePro(g, W, H, -180, H * 0.8 - 180, '결승선 15m', holdOn ? ((time * 0.4) % 1) : 0, time);
+  drawGuidePro(g, { min: { x: falling.x - 36, y: falling.y }, max: { x: falling.x + 36, y: falling.y + 24 } }, -H * 0.8, H, 0);
+
+  for (const b of [...placed, falling]) {
+    g.save();
+    g.translate(b.x, b.y);
+    if (b.magic) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 6);
+      g.strokeStyle = `rgba(255,215,64,${0.45 + 0.4 * pulse})`;
+      g.lineWidth = 9 + 3 * pulse;
+      g.lineJoin = 'round';
+      cellsPath(g, b.local, CELL, 0); g.stroke();
+    }
+    if (b.ice) drawIceBrickPro(g, b, OUTLINE);
+    else drawNormalBrickPro(g, b, COLORS[b.shape], OUTLINE);
+    g.restore();
+  }
+  g.restore();
+
+  drawBadgePill(g, W - 10, 16, `${(skyM + 6.4).toFixed(1)}m`, 'STAGE 1');
+  drawNextCard(g, 10, 16, 'T', SHAPES.T, cellsSize, COLORS, OUTLINE);
+  if (magicOn) {
+    drawInfoCard(g, W, 92, { text: '단단한 쇠 벽돌! 잘 안 밀려요', tone: 'light', t: 0.6 }, splitInfo, infoAlpha);
+  }
+}
+
+let last = 0;
+function loop(now) {
+  const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+  last = now;
+  time += dt;
+  falling.x = 180 + Math.sin(time * 1.4) * 38;
+
+  gOld.setTransform(dpr, 0, 0, dpr, 0, 0); drawOld(gOld);
+  gNew.setTransform(dpr, 0, 0, dpr, 0, 0); drawNew(gNew);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.getElementById('g-sky').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-m]');
+  if (!b) return;
+  skyM = Number(b.dataset.m);
+  document.querySelectorAll('#g-sky button').forEach((x) => x.classList.toggle('on', x === b));
+});
+document.getElementById('btn-hold').addEventListener('click', (e) => {
+  holdOn = !holdOn; e.target.classList.toggle('on', holdOn);
+});
+document.getElementById('btn-hold').classList.toggle('on', holdOn);
+document.getElementById('btn-magic').addEventListener('click', (e) => {
+  magicOn = !magicOn; e.target.classList.toggle('on', magicOn);
+});
+document.getElementById('btn-magic').classList.toggle('on', magicOn);
+</script>
+</body>
+</html>

@@ -14,8 +14,17 @@
 // 'crumbleall' (no pattern needs it at the moment). `gate: true` on a platform marks a piece the intended route
 // must stand on (slab patterns; checked by tests/obby-structures.test.js).
 //
-// Every pattern has a `family` (its skeleton; tower.js never stacks two sections of the same family and picks the
-// family before the pattern, so no skeleton dominates): 'switchback' = tower3 below, 'slab-*' = slabs() below.
+// Every pattern has a `family` (its skeleton). tower.js groups them (familyGroup(): switchback / slab / stones / drop /
+// airjump / mixed), never stacks two sections of the same group, draws at least 4 groups per tower and picks the
+// group before the pattern, so no skeleton dominates: 'switchback' = tower3 below, 'slab-*' = slabs() below, and the
+// OPEN-AIR families of families.js: 'stones' (징검다리: separate small stones over a lava pit, laser gates / saws /
+// crushers in the gaps), 'drop' (떨어지는 구간: spring up to a hooded ledge E, walk off its edge and press jump WHILE
+// FALLING to catch the far ledge T; `dropEdge: true` marks E for the solver, tests prove a route needs that press),
+// 'airjump' (a tall ladder of +105px hops that need ground jump + air jump, wide gaps, hazards between) and 'mixed'
+// (ladder -> spring -> drop -> climb: three different beats in one section).
+// Elimination hazards beyond spikes (hazards.js; all `type:'spike'` entries with `hz`, touching = the attempt ends):
+// LAVA pool (static), LASER beam (on / off by the world clock), SAW blade (patrols a line), CRUSHER (drops periodically).
+// The open-air families can be skipped by a 🪶 / ⏱-high jump, so such patterns carry honest `incompatible` flags.
 // Design rules (why the layouts look like this): a double jump climbs ~177px and, with a late air-jump press,
 // carries ~210px sideways at +130px; the 🪶 / ⏱-high mutators reach ~215px; platforms are one-way. Open ledge layouts
 // therefore get skipped, so every skeleton is built from walkways under spike hoods (walk, never jump):
@@ -27,6 +36,7 @@
 // joints / ferries (a raft swinging in a gap of the walkway) you must wait for. Ceilings never hang over open ends
 // or within 190px above the entry rest (switchback), so the 🪶 / ⏱ arcs stay safe; the tests prove every pattern
 // under each mutator env, mirrored and with applyCrumbleAll, and that its fastest route walks the whole structure.
+import { NEW_SECTIONS } from './families.js';
 export const SECTION_H = 780;
 export const WORLD_W = 360;
 export const REST_X = 110, REST_W = 140;
@@ -292,9 +302,20 @@ export const SECTIONS = [
   { id: 't3-12', tier: 3, family: 'slab-spiral', name: '소용돌이 창문', theme: 'conveyor', platforms: slabs({ floors: win(SPIRAL, ['ferry', 'plain', 'belt', 'ferry']) }) },
   { id: 't3-13', tier: 3, family: 'slab-chimney', name: '굴뚝 관문', theme: 'final', finalGate: true, platforms: slabs({ floors: win(CHIM, ['ferry', 'plain']) }) },
   { id: 't3-14', tier: 3, family: 'slab-edge', name: '창문 관문', theme: 'final', finalGate: true, platforms: slabs({ speed: 1.0, floors: win(EDGE, ['ferry', 'joint']) }) },
+  ...NEW_SECTIONS,
 ].map((s) => ({ family: 'switchback', ...s, platforms: s.platforms.flat() }));
 
 export const SECTION_BY_ID = new Map(SECTIONS.map((s) => [s.id, s]));
+
+// Skeleton GROUP of a family id: the five 'slab-*' window layouts are one group ('slab'); every other family is its own.
+// tower.js mixes groups (never the same group twice in a row, at least 4 different groups per tower).
+// 다음 구간이 입구 옆에 용암 웅덩이(PIT)를 두면, 이 패턴들은 마지막 창문이 용암 쪽(가장자리)이라 빠져나갈 길이
+// 막힌다. tests/obby-pit.test.js가 목록이 정확한지 풀이기로 증명한다. tower.js는 이 패턴 바로 위에 용암 입구
+// 구간(hasEntryLava)을 올리지 않는다.
+export const NO_PIT_AFTER = new Set(['t1-10', 't1-12', 't1-13', 't1-14', 't2-10', 't2-12', 't2-13', 't3-10', 't3-12', 't3-13', 't3-14', 't1-18', 't2-21', 't2-22', 't3-18']);
+export const hasEntryLava = (p) => p.platforms.some((q) => q.hz === 'lava' && q.y <= 16);
+export const familyGroup = (family) => (String(family).startsWith('slab-') ? 'slab' : family);
+export const FAMILY_GROUPS = ['switchback', 'slab', 'stones', 'drop', 'airjump', 'mixed'];
 
 function withDefaults(p) {
   if (p.type === 'spike') return { ...p };
@@ -310,7 +331,7 @@ export function sectionPlatforms(pattern) {
 // (baseX mirrored, phase + PI), conveyor belts flip direction.
 export function mirrorPlatform(p) {
   const q = { ...p, x: WORLD_W - p.x - p.w };
-  if (p.type === 'moving') {
+  if (p.type === 'moving' || (p.hz === 'saw' && p.axis !== 'y')) {
     q.baseX = WORLD_W - p.baseX - p.w;
     q.phase = (p.phase || 0) + Math.PI;
   }
@@ -322,6 +343,13 @@ export function mirrorPattern(pattern) {
 }
 
 // Is the pattern proven clearable under a stepPlayer-env mutator kind?
+// A platform moved up by dy (hazards that anchor on a second y field keep it in step).
+export function shiftY(p, dy) {
+  const q = { ...p, y: p.y + dy };
+  if (p.baseY !== undefined) q.baseY = p.baseY + dy;
+  return q;
+}
+
 export function isCompatible(pattern, kind) {
   return !(pattern.incompatible || []).includes(kind);
 }
