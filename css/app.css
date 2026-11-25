@@ -261,6 +261,21 @@ body{background-color:#0c0820;
 .px-btn:active:not(:disabled){transform:translateY(3px)}
 .px-btn:disabled{opacity:.4}
 .px-screen button:focus-visible{outline:3px dashed var(--px-yel);outline-offset:3px}
+/* start-up wizard */
+.px-modal-foot{display:flex;gap:12px;align-items:stretch;justify-content:center;padding:4px 14px 16px}
+.px-modal-foot:empty{display:none}
+.px-modal-foot .px-btn{flex:1}
+.px-btn-sub{background:#5a47c0;box-shadow:-3px 0 0 0 var(--px-edge),3px 0 0 0 var(--px-edge),0 -3px 0 0 var(--px-edge),0 6px 0 0 var(--px-edge),inset 3px 3px 0 0 #8a78e8,inset -3px -3px 0 0 #3b2d86}
+.px-skip{min-height:48px;padding:0 16px;border:0;background:none;color:#cfc8f5;font-size:18px;text-decoration:underline}
+.px-step-no{flex:none;min-width:56px;padding-right:12px;text-align:right;font-size:20px;color:var(--px-yel);text-shadow:2px 2px 0 var(--px-edge)}
+.px-dots{display:flex;justify-content:center;gap:10px;padding-top:14px}
+.px-dots i{width:18px;height:10px;background:#3b2d86;box-shadow:0 0 0 2px var(--px-edge)}
+.px-dots i.done{background:#1e9a2c}
+.px-dots i.on{background:var(--px-yel)}
+.px-wiz .px-modal-body{padding-top:14px}
+.px-tiles.hint .px-tile{animation:px-hint .45s steps(2) 3}
+@keyframes px-hint{50%{transform:translateY(-4px)}}
+@media (max-height:700px){.px-wiz .px-chips{gap:8px}.px-wiz .px-chip{min-height:48px}.px-wiz .px-modal-body{gap:8px;padding-bottom:10px}}
 @keyframes px-fade{from{opacity:0}to{opacity:1}}
 @keyframes px-drop{from{transform:translateY(-14px)}to{transform:none}}
 @media (max-height:700px){.px-logo{margin-bottom:8px}.px-tiles{margin-top:14px}}
