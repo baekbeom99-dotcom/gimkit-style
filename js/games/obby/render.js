@@ -18,6 +18,28 @@ export function drawPlatform(g, p, sy, time) {
   return drawPlatformPro(g, p, sy, time, PLAT_OPTS);
 }
 
+// faint dashed ghost + recharge bar while a crumbled platform waits to respawn
+export function drawCrumbleGhost(g, p, sy, progress, time = 0) {
+  const prog = Math.max(0, Math.min(1, progress));
+  const blink = prog > 0.78 ? 0.45 + 0.35 * Math.sin(time * 16) : 0.35;
+  g.save();
+  g.globalAlpha = blink;
+  g.fillStyle = 'rgba(166,123,82,0.22)';
+  rr(g, p.x, sy, p.w, 16, 6);
+  g.fill();
+  g.strokeStyle = prog > 0.78 ? '#ffd23f' : '#d6b48a';
+  g.lineWidth = 1.6;
+  g.setLineDash([5, 4]);
+  rr(g, p.x, sy, p.w, 16, 6);
+  g.stroke();
+  g.setLineDash([]);
+  // subtle fill bar along the bottom edge showing respawn progress
+  g.fillStyle = prog > 0.78 ? '#ffd23f' : '#c9a373';
+  rr(g, p.x + 3, sy + 11.5, (p.w - 6) * prog, 2.5, 1.2);
+  g.fill();
+  g.restore();
+}
+
 // same character as 점프맵
 export function drawPlayer(g, player, sy, dead, time = 0, squash = 0, move = 0, movePhase = 0) {
   drawCharacter(g, {

@@ -10,7 +10,7 @@ import {
   metersAt, formatTime, saveBestTime,
 } from './attempt.js';
 import {
-  SPRING_ANIM, drawPlatform, drawPlayer, drawJumpPowerFx, drawSectionLabel, drawWater, drawWaterWarning, drawWindStreaks,
+  SPRING_ANIM, drawPlatform, drawCrumbleGhost, drawPlayer, drawJumpPowerFx, drawSectionLabel, drawWater, drawWaterWarning, drawWindStreaks,
   drawWindArrow, makeConfetti, stepConfetti, drawConfetti, drawBanner, drawPill, drawMutatorCard, drawProgress,
 } from './render.js';
 import { createParticlePool, hudTopY } from '../common/canvas-fx.js';
@@ -24,6 +24,7 @@ const CLEAR_END_DELAY = 0.6; // confetti first, then the review overlay
 const FAIL_BANNER_SEC = 1.7;
 const INFO_BANNER_SEC = 2.6;
 const WATER_SINK = 6;     // feet this far under the surface = fail
+const CRUMBLE_RESPAWN_SEC = 5; // 사라진 발판 5초 후 재생성
 
 const MODE_OPTIONS = [
   { id: 'practice', label: '연습', emoji: '🚩', desc: '체크포인트 있음 · 변형 없음' },
@@ -170,7 +171,18 @@ export default {
         }
       }
       moveMovers();
-      for (const p of platforms) if (p.springT > 0) p.springT = Math.max(0, p.springT - h);
+      for (const p of platforms) {
+        if (p.springT > 0) p.springT = Math.max(0, p.springT - h);
+        if (p.gone && p.surface === 'crumble') {
+          p.respawnT = (p.respawnT || 0) + h;
+          if (p.respawnT >= CRUMBLE_RESPAWN_SEC) {
+            p.gone = false;
+            p.crumbleT = 0;
+            p.respawnT = 0;
+            particles.emitSparks(p.x + p.w / 2, p.y + 8, '#ffe2b8', 6);
+          }
+        }
+      }
       player.fallLimit = camY - 20;
       const held = ctx.input.held;
       const press = jumpPress; jumpPress = false;
@@ -364,9 +376,12 @@ export default {
         else if (kind === 'shake') drawWindStreaks(g, W, H, rt.shake.vx, time, false);
 
         for (const p of platforms) {
-          if (p.gone) continue;
           const sy = toScreenY(p.y);
           if (sy < -70 || sy > H + 40) continue;
+          if (p.gone) {
+            if (p.surface === 'crumble') drawCrumbleGhost(g, p, sy, (p.respawnT || 0) / CRUMBLE_RESPAWN_SEC, time);
+            continue;
+          }
           drawPlatform(g, p, sy, time);
         }
 

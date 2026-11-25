@@ -270,3 +270,22 @@ test('missing ctx.choose falls back to practice; destroy is safe', async () => {
   game.destroy();
   game.update(1 / 60);
 });
+
+test('crumble platforms respawn 5 seconds after disappearing', async () => {
+  const { game } = await started('hard');
+  game.debug.setMutator('crumbleAll');
+  const cr = game.debug.platforms.find((p) => p.surface === 'crumble' && !p.rest);
+  assert.ok(cr, 'has a crumble platform');
+  // simulate the platform crumbling
+  cr.gone = true;
+  cr.crumbleT = 0.5;
+  cr.respawnT = 0;
+  // keep player safely standing on ground rest platform
+  for (let i = 0; i < 60 * 4; i++) game.update(1 / 60);
+  assert.equal(cr.gone, true, 'still gone before 5s');
+  game.render(); // ghost outline renders cleanly while gone
+  for (let i = 0; i < 70; i++) game.update(1 / 60); // > 5s total
+  assert.equal(cr.gone, false, 'respawned after 5s');
+  assert.equal(cr.crumbleT, 0);
+  assert.equal(cr.respawnT, 0);
+});
