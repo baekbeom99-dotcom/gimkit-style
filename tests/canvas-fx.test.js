@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  rr, safeRadialGlow, drawBoltIcon, drawQuestionIcon, drawFlagIcon, drawTrophyIcon,
+  hudTopY, rr, safeRadialGlow, drawBoltIcon, drawQuestionIcon, drawFlagIcon, drawTrophyIcon,
   drawBadgePill, drawChipPill, drawBannerCard, drawCharacter, drawPlatformPro,
   drawPickupPro, createParticlePool,
 } from '../js/games/common/canvas-fx.js';
@@ -76,4 +76,19 @@ test('particle pool emits, steps, caps, and expires cleanly', () => {
   assert.ok(pool.count > 0);
   pool.step(1.0);
   assert.equal(pool.count, 0);
+});
+
+test('hudTopY returns fallback without DOM and accounts for zoomed HUD height with DOM', () => {
+  assert.equal(hudTopY(null, 66, 10), 66);
+  const prevDoc = globalThis.document;
+  try {
+    globalThis.document = {
+      documentElement: { style: { getPropertyValue: () => '1.45' } },
+      getElementById: (id) => (id === 'hud' ? { getBoundingClientRect: () => ({ bottom: 76, height: 76 }) } : null),
+    };
+    const canvas = { getBoundingClientRect: () => ({ top: 0, width: 640 }) };
+    assert.equal(hudTopY(canvas, 66, 10), 86);
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });

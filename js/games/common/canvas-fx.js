@@ -1,6 +1,23 @@
 // Shared casual-vector canvas visual helpers for Phase 1+ games.
 // Pure Canvas 2D drawing utilities; safe with headless Proxy g2d test mocks.
 
+export function hudTopY(canvas, fallback = 66, gap = 10) {
+  if (typeof document !== 'undefined' && canvas && typeof canvas.getBoundingClientRect === 'function') {
+    const scale = parseFloat(document.documentElement?.style?.getPropertyValue('--ui-scale')) || 1;
+    const minBottom = Math.round(52 * scale);
+    const hudEl = document.getElementById('hud');
+    if (hudEl && typeof hudEl.getBoundingClientRect === 'function') {
+      const hr = hudEl.getBoundingClientRect();
+      const cr = canvas.getBoundingClientRect();
+      if (hr.height > 0 && cr.width > 0) {
+        return Math.max(minBottom, Math.round(hr.bottom - cr.top)) + gap;
+      }
+    }
+    return minBottom + gap;
+  }
+  return fallback;
+}
+
 export function rr(g, x, y, w, h, r) {
   const rad = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
   g.beginPath();

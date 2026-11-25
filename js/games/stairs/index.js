@@ -3,7 +3,7 @@ import { getBest } from '../../core/storage.js';
 import {
   drawStairsBackground, drawStairBlock, drawClimber, drawTapHint,
 } from './render.js';
-import { drawBadgePill, drawBannerCard } from '../common/canvas-fx.js';
+import { drawBadgePill, drawBannerCard, hudTopY } from '../common/canvas-fx.js';
 
 // Input policy: every tap is applied to the logic IMMEDIATELY (logic is instant,
 // so nothing is skipped or double-applied). The hop animation is only visual and
@@ -232,8 +232,9 @@ export default {
       g.save();
       const cssW = (ctx.canvas && ctx.canvas.clientWidth) || W;
       g.scale(W / cssW, W / cssW);
-      drawBadgePill(g, cssW - 10, 62, `${st.score}층`, `최고 ${Math.max(best, st.score)}층`);
-      if (banner) drawBannerCard(g, cssW, 134, banner);
+      const topY = hudTopY(ctx.canvas, 66, 10);
+      const pillBot = drawBadgePill(g, cssW - 10, topY, `${st.score}층`, `최고 ${Math.max(best, st.score)}층`);
+      if (banner) drawBannerCard(g, cssW, pillBot + 14, banner);
       g.restore();
     }
 

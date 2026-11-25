@@ -5,7 +5,7 @@ import {
 import { drawBackground } from './themes.js';
 import { getBest } from '../../core/storage.js';
 import {
-  drawCharacter, drawPlatformPro, drawPickupPro, drawBadgePill, drawBannerCard, createParticlePool,
+  drawCharacter, drawPlatformPro, drawPickupPro, drawBadgePill, drawBannerCard, createParticlePool, hudTopY,
 } from '../common/canvas-fx.js';
 
 const FOLLOW = 340;       // player stays ~340px above the bottom edge (touch pads cover the lowest part)
@@ -371,8 +371,9 @@ export default {
           const cssW = (ctx.canvas && ctx.canvas.clientWidth) || W;
           const k = W / cssW;
           g.scale(k, k);
-          if (banner) drawBannerCard(g, cssW, 146, banner);
-          drawBadgePill(g, cssW - 10, 62, cur, top);
+          const topY = hudTopY(ctx.canvas, 66, 10);
+          const pillBot = drawBadgePill(g, cssW - 10, topY, cur, top);
+          if (banner) drawBannerCard(g, cssW, pillBot + 14, banner);
           g.restore();
         }
       },

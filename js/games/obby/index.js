@@ -13,7 +13,7 @@ import {
   SPRING_ANIM, drawPlatform, drawPlayer, drawJumpPowerFx, drawSectionLabel, drawWater, drawWaterWarning, drawWindStreaks,
   drawWindArrow, makeConfetti, stepConfetti, drawConfetti, drawBanner, drawPill, drawMutatorCard, drawProgress,
 } from './render.js';
-import { createParticlePool } from '../common/canvas-fx.js';
+import { createParticlePool, hudTopY } from '../common/canvas-fx.js';
 
 const SECTION_COUNT = 8;
 const FOLLOW = 340;       // player stays ~340px above the bottom edge (touch pads cover the lowest part)
@@ -258,9 +258,10 @@ export default {
       g.save();
       g.scale(k, k);
       const n = tower.sections.length;
-      const pillBot = drawPill(g, cssW, `구간 ${att.attemptSection}/${n}`, `도전 ${att.attempts} · ⚡${ctx.energy.value}`);
+      const topY = hudTopY(ctx.canvas, 66, 10);
+      const pillBot = drawPill(g, cssW, `구간 ${att.attemptSection}/${n}`, `도전 ${att.attempts} · ⚡${ctx.energy.value}`, topY);
       const mInfo = mutatorDisplay();
-      const mutBot = mInfo ? drawMutatorCard(g, cssW, 56, mInfo) : pillBot;
+      const mutBot = mInfo ? drawMutatorCard(g, cssW, topY, mInfo) : pillBot;
       const top = pillBot + 14;
       const bottom = Math.max(top + 120, cssH * 0.54);
       const frac = Math.max(0, player.y) / tower.height, best = att.runMaxY / tower.height;

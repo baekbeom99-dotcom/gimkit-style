@@ -6,7 +6,7 @@ import { getBest } from '../../core/storage.js';
 import {
   drawStackBackground, drawPedestal, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
 } from './render.js';
-import { drawBadgePill, drawChipPill, createParticlePool } from '../common/canvas-fx.js';
+import { drawBadgePill, drawChipPill, createParticlePool, hudTopY } from '../common/canvas-fx.js';
 
 const K = 0.57;            // 월드 -> 화면 배율 (바닥 200 -> 약 195px)
 const CAM_Y_FRAC = 0.58;   // 맨 위 층이 화면 높이의 58% 지점
@@ -350,7 +350,8 @@ export default {
       g.save();
       const { cssW, cssH } = cssScale();
       const fl = floors();
-      const bot = drawBadgePill(g, cssW - 10, 62, `${fl}층`, `최고 ${Math.max(best, fl)}층`);
+      const topY = hudTopY(ctx.canvas, 66, 10);
+      const bot = drawBadgePill(g, cssW - 10, topY, `${fl}층`, `최고 ${Math.max(best, fl)}층`);
       if (combo > 0) {
         const col = combo >= 6 ? '#ff79c6' : combo >= REGROW_FROM ? '#ffd23f' : '#9be0ff';
         drawChipPill(g, cssW - 10, bot + 6, `PERFECT x${combo}`, col);

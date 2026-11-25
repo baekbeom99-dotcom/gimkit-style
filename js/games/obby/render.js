@@ -169,8 +169,8 @@ export function drawBanner(g, cssW, b, y = 150) {
 }
 
 // section box under the energy gauge (top left, CSS px): crisp '구간 N/8' + '도전 K · ⚡E'. Returns its bottom y.
-export function drawPill(g, _cssW, big, small) {
-  return drawBadgePill(g, 10, 56, big, small, { align: 'left', accent: '#ffd23f', border: '#ffd23f' });
+export function drawPill(g, _cssW, big, small, topY = 66) {
+  return drawBadgePill(g, 10, topY, big, small, { align: 'left', accent: '#ffd23f', border: '#ffd23f' });
 }
 
 // small chip under the pill (CSS px), kept for compatibility
