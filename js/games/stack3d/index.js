@@ -4,7 +4,7 @@ import {
 } from './logic.js';
 import { getBest } from '../../core/storage.js';
 import {
-  drawStackBackground, drawPedestal, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
+  drawStackBackground, drawIslandAndSea, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
 } from './render.js';
 import { drawBadgePill, drawChipPill, createParticlePool, hudTopY } from '../common/canvas-fx.js';
 
@@ -216,7 +216,7 @@ export default {
     function drawStack() {
       if (state === 'review') return drawReviewStack();
       const lo = Math.max(0, stack.length - MAX_DRAW_LAYERS);
-      if (lo === 0) drawPedestal(g, stack[0].slab, P, stack[0].hue);
+      if (lo === 0) drawIslandAndSea(g, stack[0].slab, P, W, H, time, vk);
       for (let i = lo; i < stack.length; i++) {
         const e = stack[i];
         const p = P(e.slab.cx, e.slab.cz, i * SLAB_H);
@@ -230,7 +230,7 @@ export default {
     // 리뷰: 전체 층을 그리고, 반짝이는 띠가 아래에서 위로 층을 타고 오른다
     function drawReviewStack() {
       const n = stack.length;
-      drawPedestal(g, stack[0].slab, P, stack[0].hue);
+      drawIslandAndSea(g, stack[0].slab, P, W, H, time, vk);
       const cycle = n * 0.05 + 2.5;
       for (let i = 0; i < n; i++) {
         const e = stack[i];

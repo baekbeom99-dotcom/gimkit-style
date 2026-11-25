@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { project, createBase, SLAB_H } from '../js/games/stack3d/logic.js';
 import {
-  drawStackBackground, drawPedestal, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
+  drawStackBackground, drawIslandAndSea, drawSlabPro, drawMovingShadow, drawReviewCrown, drawTapPrompt,
 } from '../js/games/stack3d/render.js';
 
 function makeProxyG2d() {
@@ -29,7 +29,7 @@ test('stack3d render helpers run cleanly and balance save/restore on Proxy mock'
 
   drawStackBackground(g, 360, 640, cam.y, 200, 0, clouds, 1.0);
   drawStackBackground(g, 360, 640, cam.y, 320, 45, clouds, 2.5);
-  drawPedestal(g, base, P, 190);
+  drawIslandAndSea(g, base, P, 360, 640, 1.0, 0.57);
   drawSlabPro(g, base, 0, SLAB_H, 190, P, 0.57, { flash: 0.5, regrow: 0.8 });
   drawSlabPro(g, base, SLAB_H, SLAB_H, 202, P, 0.57, { alpha: 0.7 });
   drawMovingShadow(g, base, { cx: 30, cz: 0, w: 200, d: 200 }, SLAB_H, P);
