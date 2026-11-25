@@ -1,8 +1,8 @@
 // HUD: hearts, energy gauge, score text, manual refill button.
-export function createHud(root, { energy, hearts, onManualQuiz, onExit }) {
+export function createHud(root, { energy, hearts, hideHearts, onManualQuiz, onExit }) {
   root.innerHTML = `
     <div class="ui-hud">
-      <span class="ui-hud-hearts" aria-label="하트"></span>
+      ${hideHearts ? '' : '<span class="ui-hud-hearts" aria-label="하트"></span>'}
       <span class="ui-hud-energy" aria-label="에너지"><i class="ui-hud-fill"></i><b class="ui-hud-num"></b></span>
       <span class="ui-hud-score"></span>
       <button type="button" class="ui-hud-icon ui-hud-charge" aria-label="미리 충전">⚡+</button>
@@ -18,7 +18,7 @@ export function createHud(root, { energy, hearts, onManualQuiz, onExit }) {
   function draw() {
     if (destroyed) return;
     const h = Math.max(0, hearts.value);
-    heartsEl.textContent = '❤'.repeat(h) + '♡'.repeat(Math.max(0, 3 - h));
+    if (heartsEl) heartsEl.textContent = '❤'.repeat(h) + '♡'.repeat(Math.max(0, 3 - h));
     fill.style.width = (energy.value / energy.max * 100) + '%';
     num.textContent = `⚡${energy.value}/${energy.max}`;
     btn.disabled = energy.isFull();

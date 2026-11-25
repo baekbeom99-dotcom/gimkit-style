@@ -343,12 +343,15 @@ const windAt = (zones, y) => {
 const toward = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
 
 // Advances the player one tick. input = { left, right, jump (a fresh press), canJump (default true) }.
-// env = { wind: [{y0,y1,vx}] } (optional).
+// env = { wind: [{y0,y1,vx}], gravityScale (default 1), jumpScale (default 1: multiplies the ground AND
+// air jump launch speed; springs are unaffected) } (all optional; defaults leave the jump map unchanged).
 // Events: 'landed' | 'fell' | 'jumped' (ground) | 'doubleJumped' (the one air jump) | 'hit' |
 // 'blocked' (a jump wanted but canJump is false) | 'sprang' (spring pad bounce) | 'crumbled'.
 export function stepPlayer(state, input, dt, platforms, env = {}) {
   const events = [];
   const s = state;
+  const gScale = (env && env.gravityScale) ?? 1;
+  const jScale = (env && env.jumpScale) ?? 1;
 
   if (input.jump) s.jumpBuf = JUMP_BUFFER_SEC;
   if (s.invincible > 0) s.invincible = Math.max(0, s.invincible - dt);
@@ -369,13 +372,16 @@ export function stepPlayer(state, input, dt, platforms, env = {}) {
   if (g0 && g0.surface === 'conveyor') s.x += (g0.belt || 0) * dt;
   s.x += windAt(env && env.wind, s.y) * dt;
   const cl = Math.min(WORLD_W - PLAYER_HALF_W, Math.max(PLAYER_HALF_W, s.x));
-  if (cl !== s.x) s.vx = 0;
+  const wallPinned = cl !== s.x;
+  if (wallPinned) s.vx = 0;
   s.x = cl;
 
-  // still supported?
+  // still supported? (pinned against the world wall, the body's centre must still be over the platform:
+  // otherwise a belt pushing you into the wall would hold you on a ledge you are mostly hanging off)
   if (s.onGround) {
     const g = s.ground;
-    if (!g || g.gone || s.x + PLAYER_HALF_W < g.x || s.x - PLAYER_HALF_W > g.x + g.w) {
+    if (!g || g.gone || s.x + PLAYER_HALF_W < g.x || s.x - PLAYER_HALF_W > g.x + g.w ||
+        (wallPinned && (s.x < g.x || s.x > g.x + g.w))) {
       s.onGround = false;
       s.ground = null;
       s.coyote = COYOTE_SEC;
@@ -409,7 +415,7 @@ export function stepPlayer(state, input, dt, platforms, env = {}) {
         s.coyote = 0;
         s.onGround = false;
         s.ground = null;
-        s.vy = JUMP_V;
+        s.vy = JUMP_V * jScale;
         events.push('jumped');
       }
     } else if (input.jump && !s.airJumped) {
@@ -419,7 +425,7 @@ export function stepPlayer(state, input, dt, platforms, env = {}) {
         events.push('blocked');
       } else {
         s.airJumped = true;
-        s.vy = DOUBLE_JUMP_V;
+        s.vy = DOUBLE_JUMP_V * jScale;
         events.push('doubleJumped');
       }
     }
@@ -432,8 +438,8 @@ export function stepPlayer(state, input, dt, platforms, env = {}) {
   } else {
     const prevY = s.y;
     const prevVy = s.vy;
-    s.y += s.vy * dt - 0.5 * GRAVITY * dt * dt;
-    s.vy -= GRAVITY * dt;
+    s.y += s.vy * dt - 0.5 * GRAVITY * gScale * dt * dt;
+    s.vy -= GRAVITY * gScale * dt;
     if (prevVy <= 0 || s.vy <= 0) {
       let best = null;
       for (const p of platforms) {

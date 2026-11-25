@@ -540,7 +540,66 @@ function paintStack3d() {
   return p;
 }
 
-const ART = { jump: paintJump, stairs: paintStairs, tower2d: paintTower2d, stack3d: paintStack3d };
+function darker(c) {
+  const n = (i) => Math.round(parseInt(c.slice(i, i + 2), 16) * 0.7).toString(16).padStart(2, '0');
+  return '#' + n(1) + n(3) + n(5);
+}
+
+function stripedSlab(p, x, y, w, c1, c2) {
+  const t = p.sprite();
+  t.rect(x, y, w, 5, c1);
+  for (let i = 0; i < w; i += 6) t.rect(x + i, y, 3, 5, c2);
+  for (let i = 0; i < w; i++) t.set(x + i, y + 4, darker(t.get(x + i, y + 4)));
+  t.rect(x, y, w, 1, '#ffffff');
+  t.outline('#1f1238');
+  p.blit(t);
+}
+
+// 64x48 2D tower obby: striped platforms stacked up a tower, spikes, spring pad, flag on top, orange climber mid-jump
+function paintObby() {
+  const p = new Painter(64, 48);
+  p.gradient(0, 48, ['#a6b8ff', '#c4c2ff', '#ffc9e6', '#ffe6c2']);
+  cloud(p, 10, 8, 0.8); cloud(p, 54, 30, 0.7);
+  [[22, 5], [40, 4], [8, 24], [58, 12]].forEach(([x, y]) => p.set(x, y, '#ffffff'));
+  const tw = p.sprite();
+  tw.rect(23, 14, 18, 34, '#5a4ab8');
+  for (let j = 14; j < 48; j++) for (let i = 23; i < 41; i++) if ((i + j) % 8 === 0 && hash(i, j) > 0.3) tw.set(i, j, '#6b5ccc');
+  tw.rect(23, 14, 2, 34, '#7a6cdc'); tw.rect(39, 14, 2, 34, '#3f3290');
+  tw.outline('#1f1238');
+  p.blit(tw);
+  [[4, 39, 36, '#ff6b8b', '#ffd23f'], [24, 32, 36, '#3ad6ff', '#ffffff'], [6, 25, 30, '#7be0a4', '#2fb36a'], [26, 19, 30, '#ffd23f', '#ff9d1f'], [18, 13, 28, '#b890ff', '#ffffff']]
+    .forEach(([x, y, w, a, b]) => stripedSlab(p, x, y, w, a, b));
+  p.rect(0, 45, 64, 3, '#4fd24a'); p.rect(0, 45, 64, 1, '#a6f56e');
+  const sp = p.sprite();
+  for (let k = 0; k < 3; k++) { const bx = 44 + k * 4; sp.poly([[bx, 32], [bx + 4, 32], [bx + 2, 27]], '#e8ecff'); sp.set(bx + 2, 28, '#ffffff'); }
+  sp.outline('#1f1238');
+  p.blit(sp);
+  const spr = p.sprite();
+  spr.rect(8, 36, 9, 3, '#ff4d6d'); spr.rect(8, 36, 9, 1, '#ff9fb0');
+  spr.line(9, 38, 15, 36, '#dfe3ff');
+  spr.outline('#1f1238');
+  p.blit(spr);
+  const f = p.sprite();
+  f.rect(31, 3, 1, 10, '#e8e8f4');
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) f.set(32 + i, 3 + j, (i + j) % 2 ? '#1b1340' : '#ffffff');
+  f.set(31, 2, '#ffd23f');
+  f.outline('#0b0620');
+  p.blit(f);
+  const c = p.sprite();
+  const cx = 13, cy = 24;
+  c.ellipse(cx, cy, 5, 4.6, '#ff9a2e');
+  c.ellipse(cx - 2, cy - 2, 1.8, 1.2, '#ffd08a');
+  c.set(cx + 3, cy + 2, '#c85a10'); c.set(cx + 2, cy + 3, '#c85a10'); c.set(cx + 1, cy + 3, '#c85a10');
+  c.rect(cx - 2, cy - 1, 2, 2, '#ffffff'); c.rect(cx + 1, cy - 1, 2, 2, '#ffffff');
+  c.set(cx - 1, cy, '#1b1340'); c.set(cx + 2, cy, '#1b1340');
+  c.line(cx - 5, cy - 1, cx - 7, cy - 4, '#e8741a'); c.line(cx + 5, cy - 1, cx + 7, cy - 4, '#e8741a');
+  c.set(cx - 2, cy + 5, '#d9651a'); c.set(cx + 2, cy + 5, '#d9651a');
+  c.outline('#4a1a06');
+  p.blit(c);
+  return p;
+}
+
+const ART = { jump: paintJump, stairs: paintStairs, tower2d: paintTower2d, stack3d: paintStack3d, obby: paintObby };
 
 function paintToCanvas(p, name, opts) {
   const cv = document.createElement('canvas');

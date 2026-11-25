@@ -5,6 +5,7 @@ import { createRouter } from './core/router.js';
 import { createInput } from './core/input.js';
 import { createSfx } from './core/audio.js';
 import { registry } from './games/registry.js';
+import { reviewText, normalizeChoose, createSerialQueue } from './core/overlay-opts.js';
 import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr } from './core/layout.js';
 
 const W = 360, MAX_HEARTS = 3;
@@ -88,13 +89,14 @@ const router = createRouter($('screen'), {
 });
 
 // ---- fallback HUD ----
-function createBasicHud(root, { energy, hearts }) {
+function createBasicHud(root, { energy, hearts, hideHearts }) {
   root.innerHTML = '<div class="hud-basic"><span class="h"></span><span class="bar"><i></i></span><span class="s"></span></div>';
   const h = root.querySelector('.h'), bar = root.querySelector('.bar i'), s = root.querySelector('.s');
   const draw = () => {
     h.textContent = '❤'.repeat(Math.max(0, hearts.value));
     bar.style.width = (energy.value / energy.max * 100) + '%';
   };
+  if (hideHearts) h.hidden = true;
   const off = energy.subscribe(draw);
   draw();
   return { setScore: (t) => { s.textContent = t; }, refresh: draw, destroy() { off(); root.replaceChildren(); } };
@@ -132,9 +134,9 @@ async function startGame(sel) {
   const hudRoot = $('hud');
   let hud;
   try {
-    hud = ui.hud && ui.hud.createHud ? ui.hud.createHud(hudRoot, { energy, hearts, session, sfx, onManualQuiz: () => ctx.requestQuiz({ mode: 'manual' }), onExit: () => askExit(state) }) : null;
+    hud = ui.hud && ui.hud.createHud ? ui.hud.createHud(hudRoot, { energy, hearts, hideHearts: !!mod.hideHearts, session, sfx, onManualQuiz: () => ctx.requestQuiz({ mode: 'manual' }), onExit: () => askExit(state) }) : null;
   } catch (e) { console.warn('hud fallback', e); hud = null; }
-  if (!hud) hud = createBasicHud(hudRoot, { energy, hearts });
+  if (!hud) hud = createBasicHud(hudRoot, { energy, hearts, hideHearts: !!mod.hideHearts });
 
   const state = { mod, energy, hearts, hud, session, paused: false, ended: false, raf: 0, last: 0, quizP: null, dialog: null };
   active = state;
@@ -175,15 +177,24 @@ async function startGame(sel) {
       if (state.ended || active !== state) return;
       const el = document.createElement('div');
       el.className = 'review-overlay';
-      el.innerHTML = '<div class="review-banner"><div class="review-over">게임 종료</div><div class="review-score"></div><div class="review-best"></div></div>'
+      const rt = reviewText(s, result.best, opts);
+      el.innerHTML = '<div class="review-banner"><div class="review-over"></div><div class="review-score"></div><div class="review-best"></div></div>'
         + '<div class="review-btns"><button type="button" class="review-btn review-retry">다시 하기</button><button type="button" class="review-btn review-exit">나가기</button></div>';
-      el.querySelector('.review-score').textContent = '쌓은 ' + s + (opts.unit || '');
-      el.querySelector('.review-best').textContent = '최고 기록 ' + result.best;
+      el.querySelector('.review-over').textContent = rt.heading;
+      el.querySelector('.review-score').textContent = rt.score;
+      el.querySelector('.review-best').textContent = rt.best;
+      const banner = el.querySelector('.review-banner');
+      for (const line of rt.lines) {
+        const d = document.createElement('div');
+        d.className = 'review-line';
+        d.textContent = line;
+        banner.appendChild(d);
+      }
       if (result.isNewRecord) {
         const b = document.createElement('div');
         b.className = 'review-badge';
         b.textContent = '🏆 신기록!';
-        el.querySelector('.review-banner').appendChild(b);
+        banner.appendChild(b);
       }
       el.querySelector('.review-retry').addEventListener('click', () => startGame(sel));
       el.querySelector('.review-exit').addEventListener('click', () => showSelect());
@@ -192,6 +203,59 @@ async function startGame(sel) {
       el.querySelector('.review-retry').focus();
     }, Math.max(0, Number(opts.buttonsDelayMs) || 0));
     return result;
+  }
+
+  // ctx.choose: 게임을 멈추고 선택 팝업을 띄운다. 선택한 id로 resolve(끝났으면 null). 한 번에 하나씩(대기열).
+  const chooseQ = createSerialQueue();
+  function choose(cfg) {
+    const c = normalizeChoose(cfg);
+    if (!c || state.ended || state.reviewing) return Promise.resolve(null);
+    return chooseQ(() => new Promise((resolve) => {
+      if (state.ended || state.reviewing) { resolve(null); return; }
+      state.paused = true;
+      const el = document.createElement('div');
+      el.className = 'ui-choose';
+      el.setAttribute('role', 'dialog');
+      el.innerHTML = '<div class="ui-choose-box"><div class="ui-choose-bar"><span class="ui-choose-title"></span></div><div class="ui-choose-sub"></div><div class="ui-choose-opts"></div></div>';
+      el.querySelector('.ui-choose-title').textContent = c.title;
+      const sub = el.querySelector('.ui-choose-sub');
+      sub.textContent = c.subtitle;
+      sub.hidden = !c.subtitle;
+      const box = el.querySelector('.ui-choose-opts');
+      let done = false;
+      const finish = (id) => {
+        if (done) return;
+        done = true;
+        document.removeEventListener('keydown', onKey, true);
+        el.remove();
+        if (state.chooseEl === el) state.chooseEl = null;
+        if (!state.quizP && !state.dialog) state.paused = false;
+        state.last = 0;
+        resolve(id);
+      };
+      const onKey = (e) => {
+        const n = Number(e.key);
+        if (n >= 1 && n <= c.options.length) { e.preventDefault(); finish(c.options[n - 1].id); }
+      };
+      c.options.forEach((o) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ui-choose-opt';
+        b.innerHTML = '<span class="ui-choose-emo"></span><span class="ui-choose-txt"><b class="ui-choose-label"></b><small class="ui-choose-desc"></small></span>';
+        b.querySelector('.ui-choose-emo').textContent = o.emoji;
+        b.querySelector('.ui-choose-label').textContent = o.label;
+        b.querySelector('.ui-choose-desc').textContent = o.desc;
+        if (!o.emoji) b.querySelector('.ui-choose-emo').hidden = true;
+        if (!o.desc) b.querySelector('.ui-choose-desc').hidden = true;
+        b.addEventListener('click', () => finish(o.id));
+        box.appendChild(b);
+      });
+      document.addEventListener('keydown', onKey, true);
+      state.chooseEl = el;
+      state.chooseOff = () => { done = true; document.removeEventListener('keydown', onKey, true); };
+      $('app').appendChild(el);
+      box.firstChild.focus();
+    }));
   }
 
   function endGame(score, opts) {
@@ -218,7 +282,7 @@ async function startGame(sel) {
       on: (n, fn) => input.on(n, () => { if (!state.paused && !state.ended && !state.reviewing) fn(); }),
       setItem: (s) => input.setItem && input.setItem(s), // 2D 탑쌓기 아이템 버튼(개수/사용 가능)
     },
-    energy, hearts, requestQuiz, endGame, sfx, rng: Math.random,
+    energy, hearts, requestQuiz, choose, endGame, sfx, rng: Math.random,
     hud: { setScore: (t) => hud.setScore(t) },
   };
   state.ctx = ctx;
@@ -309,6 +373,8 @@ function teardown(state) {
   if (state.dialog) { state.dialog.remove(); state.dialog = null; }
   if (state.reviewTimer) { clearTimeout(state.reviewTimer); state.reviewTimer = 0; }
   if (state.overlay) { state.overlay.remove(); state.overlay = null; }
+  if (state.chooseEl) { state.chooseEl.remove(); state.chooseEl = null; }
+  if (state.chooseOff) { state.chooseOff(); state.chooseOff = null; }
   $('hud').classList.remove('hidden');
   cancelAnimationFrame(state.raf);
   try { state.game && state.game.destroy(); } catch (e) { console.error(e); }
