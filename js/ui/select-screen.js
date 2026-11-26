@@ -40,6 +40,7 @@ export async function mount(root, props) {
       <button type="button" class="px-sel" data-k="unit"><span class="px-sel-ico"></span><span class="px-sel-lab">단원</span><span class="px-sel-val"></span></button>
     </section>
     <div class="px-tiles"></div>
+    <footer class="px-copy">© 2026 baekbeom99-dotcom · All rights reserved</footer>
     <div class="px-toast" role="status" aria-live="polite"></div>`;
   root.appendChild(el);
   const $ = (s) => el.querySelector(s);

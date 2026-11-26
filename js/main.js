@@ -1,3 +1,4 @@
+// 사부작스쿨 (c) 2026 baekbeom99-dotcom. All rights reserved. See LICENSE.
 import { createEnergy } from './core/energy.js';
 import { createQuizSession } from './core/quiz-engine.js';
 import { recordScore, getBest, createItemStats } from './core/storage.js';

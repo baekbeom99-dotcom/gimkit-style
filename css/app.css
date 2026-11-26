@@ -373,3 +373,6 @@ body{background-color:#0c0820;
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* 저작권 표시 */
+.px-copy { margin: 14px 0 6px; text-align: center; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,.45); pointer-events: none; }
