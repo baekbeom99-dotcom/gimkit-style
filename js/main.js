@@ -7,7 +7,7 @@ import { createInput } from './core/input.js';
 import { createSfx } from './core/audio.js';
 import { registry } from './games/registry.js';
 import { reviewText, normalizeChoose, createSerialQueue } from './core/overlay-opts.js';
-import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr } from './core/layout.js';
+import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr, backingScale } from './core/layout.js';
 
 const W = 360, MAX_HEARTS = 3;
 let H = 640; // 논리 높이. fullscreen 게임은 화면 비율에 맞춰 늘어남(폭 360 고정)
@@ -15,7 +15,9 @@ let H = 640; // 논리 높이. fullscreen 게임은 화면 비율에 맞춰 늘�
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
 const g2d = canvas.getContext('2d');
-let dpr = canvasDpr(window.devicePixelRatio);
+const stageW = () => ($('stage') && $('stage').getBoundingClientRect().width) || W;
+const backing = () => backingScale(window.devicePixelRatio, stageW(), W);
+let dpr = backing();
 canvas.width = W * dpr;
 canvas.height = H * dpr;
 
@@ -31,7 +33,7 @@ function applyLayoutVars() {
 
 // 캔버스 해상도를 devicePixelRatio에 맞춘다(바뀌었을 때만: 캔버스를 비우므로). 바뀌면 true.
 function syncBacking() {
-  const d = canvasDpr(window.devicePixelRatio);
+  const d = backing();
   if (d === dpr && canvas.width === Math.round(W * d) && canvas.height === Math.round(H * d)) return false;
   dpr = d;
   canvas.width = W * dpr;
@@ -64,7 +66,7 @@ function fitCanvas(full) {
     } else h = logicalHeight(r.width, r.height, W);
   }
   H = h;
-  dpr = canvasDpr(window.devicePixelRatio);
+  dpr = backing();
   canvas.width = W * dpr;
   canvas.height = H * dpr;
   placeCanvas();
