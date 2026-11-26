@@ -112,7 +112,7 @@ async function buildSession(sel, mod) {
     const { loadSet } = await import('./data/question-sets.js');
     const set = await loadSet(sel.setId || 'gugudan', { dans: (sel.units || []).map(Number).filter(Number.isFinite), units: sel.units || [] });
     const units = sel.units && sel.units.length ? sel.units.map(String) : undefined;
-    return createQuizSession({ items: set.items, units, kind: set.kind, speak: set.tts, rng: Math.random, ...extra() });
+    return createQuizSession({ items: set.items, units, kind: set.kind, speak: set.tts, prompt: set.prompt, rng: Math.random, ...extra() });
   } catch (e) {
     console.warn('question set fallback', e);
     const items = [];

@@ -57,7 +57,7 @@ function memoryStats() {
   };
 }
 
-export function createQuizSession({ items, units, rng = Math.random, gainMultiplier = 1, stats, kind = 'equation', speak = null }) {
+export function createQuizSession({ items, units, rng = Math.random, gainMultiplier = 1, stats, kind = 'equation', speak = null, prompt = null }) {
   stats = stats || memoryStats();
   let source = items;
   if (Array.isArray(units) && units.length) {
@@ -94,7 +94,7 @@ export function createQuizSession({ items, units, rng = Math.random, gainMultipl
       }
       current = { correctIndex, answered: false, key: keyOf(item) };
       // 그림 문제(kind 'figure'): q는 통계용 내부 키이므로 화면에는 figure(그림)와 prompt(안내 글)를 쓴다
-      return { q: item.q, choices, correctIndex, removedIndex, kind, speak, figure: item.figure || null, prompt: item.prompt || null };
+      return { q: item.q, choices, correctIndex, removedIndex, kind, speak, figure: item.figure || null, prompt: item.prompt || prompt || null };
     },
     answer(choiceIndex) {
       if (!current || current.answered) {

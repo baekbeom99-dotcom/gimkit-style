@@ -102,7 +102,7 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
       }
       const cap = document.createElement('div');
       cap.className = 'ui-q-cap';
-      cap.textContent = '뜻을 골라요';
+      cap.textContent = q.prompt || '뜻을 골라요';
       qEl.replaceChildren(row, cap);
     }
 

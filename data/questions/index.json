@@ -3,5 +3,7 @@
   { "id": "english-g4", "title": "4학년 영단어", "subject": "영어", "grade": "4" },
   { "id": "english-g5", "title": "5학년 영단어", "subject": "영어", "grade": "5" },
   { "id": "english-g6", "title": "6학년 영단어", "subject": "영어", "grade": "6" },
-  { "id": "fraction-sample", "title": "분수 샘플", "subject": "수학", "grade": "초등" }
+  { "id": "fraction-sample", "title": "분수 샘플", "subject": "수학", "grade": "초등" },
+  { "id": "japanese-hiragana", "title": "히라가나", "subject": "일본어", "grade": "기초" },
+  { "id": "japanese-katakana", "title": "가타카나", "subject": "일본어", "grade": "기초" }
 ]

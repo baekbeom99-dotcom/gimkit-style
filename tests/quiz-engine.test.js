@@ -158,9 +158,10 @@ test('next() returns kind and speak (defaults: equation / null)', () => {
   const d = createQuizSession({ items }).next();
   assert.equal(d.kind, 'equation');
   assert.equal(d.speak, null);
-  const w = createQuizSession({ items, kind: 'word', speak: 'en-US' }).next();
+  const w = createQuizSession({ items, kind: 'word', speak: 'en-US', prompt: '알맞은 발음을 골라요' }).next();
   assert.equal(w.kind, 'word');
   assert.equal(w.speak, 'en-US');
+  assert.equal(w.prompt, '알맞은 발음을 골라요');
   assert.ok(Array.isArray(w.choices) && typeof w.correctIndex === 'number' && 'removedIndex' in w && 'q' in w);
 });
 const words = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].map((w, i) => ({ unit: i === 0 ? 'one' : 'rest', q: w, answer: 'K' + w }));

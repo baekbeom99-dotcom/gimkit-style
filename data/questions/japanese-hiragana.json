@@ -1,0 +1,77 @@
+{
+  "id": "japanese-hiragana",
+  "title": "히라가나",
+  "subject": "일본어",
+  "grade": "기초",
+  "kind": "word",
+  "prompt": "알맞은 발음을 골라요",
+  "units": [
+    { "id": "a", "title": "아행" },
+    { "id": "ka", "title": "카행" },
+    { "id": "sa", "title": "사행" },
+    { "id": "ta", "title": "타행" },
+    { "id": "na", "title": "나행" },
+    { "id": "ha", "title": "하행" },
+    { "id": "ma", "title": "마행" },
+    { "id": "ya", "title": "야행" },
+    { "id": "ra", "title": "라행" },
+    { "id": "wa", "title": "와행" }
+  ],
+  "items": [
+    { "unit": "a", "q": "あ", "answer": "아 (a)", "distractors": ["이 (i)", "우 (u)", "에 (e)", "오 (o)", "메 (me)"] },
+    { "unit": "a", "q": "い", "answer": "이 (i)", "distractors": ["아 (a)", "우 (u)", "에 (e)", "오 (o)", "리 (ri)"] },
+    { "unit": "a", "q": "う", "answer": "우 (u)", "distractors": ["아 (a)", "이 (i)", "에 (e)", "오 (o)", "라 (ra)"] },
+    { "unit": "a", "q": "え", "answer": "에 (e)", "distractors": ["아 (a)", "이 (i)", "우 (u)", "오 (o)", "응 (n)"] },
+    { "unit": "a", "q": "お", "answer": "오 (o)", "distractors": ["아 (a)", "이 (i)", "우 (u)", "에 (e)", "무 (mu)"] },
+
+    { "unit": "ka", "q": "か", "answer": "카 (ka)", "distractors": ["키 (ki)", "쿠 (ku)", "케 (ke)", "코 (ko)", "야 (ya)"] },
+    { "unit": "ka", "q": "き", "answer": "키 (ki)", "distractors": ["카 (ka)", "쿠 (ku)", "케 (ke)", "코 (ko)", "사 (sa)"] },
+    { "unit": "ka", "q": "く", "answer": "쿠 (ku)", "distractors": ["카 (ka)", "키 (ki)", "케 (ke)", "코 (ko)", "헤 (he)"] },
+    { "unit": "ka", "q": "け", "answer": "케 (ke)", "distractors": ["카 (ka)", "키 (ki)", "쿠 (ku)", "코 (ko)", "하 (ha)"] },
+    { "unit": "ka", "q": "こ", "answer": "코 (ko)", "distractors": ["카 (ka)", "키 (ki)", "쿠 (ku)", "케 (ke)", "니 (ni)"] },
+
+    { "unit": "sa", "q": "さ", "answer": "사 (sa)", "distractors": ["시 (shi)", "스 (su)", "세 (se)", "소 (so)", "키 (ki)"] },
+    { "unit": "sa", "q": "し", "answer": "시 (shi)", "distractors": ["사 (sa)", "스 (su)", "세 (se)", "소 (so)", "츠 (tsu)"] },
+    { "unit": "sa", "q": "す", "answer": "스 (su)", "distractors": ["사 (sa)", "시 (shi)", "세 (se)", "소 (so)", "무 (mu)"] },
+    { "unit": "sa", "q": "せ", "answer": "세 (se)", "distractors": ["사 (sa)", "시 (shi)", "스 (su)", "소 (so)", "키 (ki)"] },
+    { "unit": "sa", "q": "そ", "answer": "소 (so)", "distractors": ["사 (sa)", "시 (shi)", "스 (su)", "세 (se)", "로 (ro)"] },
+
+    { "unit": "ta", "q": "た", "answer": "타 (ta)", "distractors": ["치 (chi)", "츠 (tsu)", "테 (te)", "토 (to)", "나 (na)"] },
+    { "unit": "ta", "q": "ち", "answer": "치 (chi)", "distractors": ["타 (ta)", "츠 (tsu)", "테 (te)", "토 (to)", "라 (ra)"] },
+    { "unit": "ta", "q": "つ", "answer": "츠 (tsu)", "distractors": ["타 (ta)", "치 (chi)", "테 (te)", "토 (to)", "우 (u)"] },
+    { "unit": "ta", "q": "て", "answer": "테 (te)", "distractors": ["타 (ta)", "치 (chi)", "츠 (tsu)", "토 (to)", "소 (so)"] },
+    { "unit": "ta", "q": "と", "answer": "토 (to)", "distractors": ["타 (ta)", "치 (chi)", "츠 (tsu)", "테 (te)", "코 (ko)"] },
+
+    { "unit": "na", "q": "な", "answer": "나 (na)", "distractors": ["니 (ni)", "누 (nu)", "네 (ne)", "노 (no)", "타 (ta)"] },
+    { "unit": "na", "q": "に", "answer": "니 (ni)", "distractors": ["나 (na)", "누 (nu)", "네 (ne)", "노 (no)", "코 (ko)"] },
+    { "unit": "na", "q": "ぬ", "answer": "누 (nu)", "distractors": ["나 (na)", "니 (ni)", "네 (ne)", "노 (no)", "메 (me)"] },
+    { "unit": "na", "q": "ね", "answer": "네 (ne)", "distractors": ["나 (na)", "니 (ni)", "누 (nu)", "노 (no)", "레 (re)", "와 (wa)"] },
+    { "unit": "na", "q": "の", "answer": "노 (no)", "distractors": ["나 (na)", "니 (ni)", "누 (nu)", "네 (ne)", "메 (me)"] },
+
+    { "unit": "ha", "q": "は", "answer": "하 (ha)", "distractors": ["히 (hi)", "후 (fu)", "헤 (he)", "호 (ho)", "마 (ma)"] },
+    { "unit": "ha", "q": "ひ", "answer": "히 (hi)", "distractors": ["하 (ha)", "후 (fu)", "헤 (he)", "호 (ho)", "우 (u)"] },
+    { "unit": "ha", "q": "ふ", "answer": "후 (fu)", "distractors": ["하 (ha)", "히 (hi)", "헤 (he)", "호 (ho)", "우 (u)"] },
+    { "unit": "ha", "q": "へ", "answer": "헤 (he)", "distractors": ["하 (ha)", "히 (hi)", "후 (fu)", "호 (ho)", "쿠 (ku)"] },
+    { "unit": "ha", "q": "ほ", "answer": "호 (ho)", "distractors": ["하 (ha)", "히 (hi)", "후 (fu)", "헤 (he)", "마 (ma)"] },
+
+    { "unit": "ma", "q": "ま", "answer": "마 (ma)", "distractors": ["미 (mi)", "무 (mu)", "메 (me)", "모 (mo)", "호 (ho)"] },
+    { "unit": "ma", "q": "み", "answer": "미 (mi)", "distractors": ["마 (ma)", "무 (mu)", "메 (me)", "모 (mo)", "요 (yo)"] },
+    { "unit": "ma", "q": "む", "answer": "무 (mu)", "distractors": ["마 (ma)", "미 (mi)", "메 (me)", "모 (mo)", "스 (su)"] },
+    { "unit": "ma", "q": "め", "answer": "메 (me)", "distractors": ["마 (ma)", "미 (mi)", "무 (mu)", "모 (mo)", "누 (nu)"] },
+    { "unit": "ma", "q": "も", "answer": "모 (mo)", "distractors": ["마 (ma)", "미 (mi)", "무 (mu)", "메 (me)", "호 (ho)"] },
+
+    { "unit": "ya", "q": "や", "answer": "야 (ya)", "distractors": ["유 (yu)", "요 (yo)", "아 (a)", "카 (ka)"] },
+    { "unit": "ya", "q": "ゆ", "answer": "유 (yu)", "distractors": ["야 (ya)", "요 (yo)", "우 (u)", "누 (nu)"] },
+    { "unit": "ya", "q": "よ", "answer": "요 (yo)", "distractors": ["야 (ya)", "유 (yu)", "오 (o)", "마 (ma)"] },
+
+    { "unit": "ra", "q": "ら", "answer": "라 (ra)", "distractors": ["리 (ri)", "루 (ru)", "레 (re)", "로 (ro)", "치 (chi)"] },
+    { "unit": "ra", "q": "り", "answer": "리 (ri)", "distractors": ["라 (ra)", "루 (ru)", "레 (re)", "로 (ro)", "이 (i)"] },
+    { "unit": "ra", "q": "る", "answer": "루 (ru)", "distractors": ["라 (ra)", "리 (ri)", "레 (re)", "로 (ro)", "스 (su)"] },
+    { "unit": "ra", "q": "れ", "answer": "레 (re)", "distractors": ["라 (ra)", "리 (ri)", "루 (ru)", "로 (ro)", "네 (ne)", "와 (wa)"] },
+    { "unit": "ra", "q": "ろ", "answer": "로 (ro)", "distractors": ["라 (ra)", "리 (ri)", "루 (ru)", "레 (re)", "소 (so)"] },
+
+    { "unit": "wa", "q": "わ", "answer": "와 (wa)", "distractors": ["오 (wo)", "응 (n)", "네 (ne)", "레 (re)"] },
+    { "unit": "wa", "q": "を", "answer": "오 (wo)", "distractors": ["와 (wa)", "응 (n)", "오 (o)", "치 (chi)"] },
+    { "unit": "wa", "q": "ん", "answer": "응 (n)", "distractors": ["와 (wa)", "오 (wo)", "에 (e)", "히 (hi)"] }
+  ]
+}
