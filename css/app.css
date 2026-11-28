@@ -321,7 +321,7 @@ body{background-color:#0c0820;
 /* 넓은 기둥(태블릿/PC)에서 글자·버튼을 비례 확대. --ui-scale은 main.js가 기둥 폭으로 계산(휴대폰은 1).
    조작 버튼(#controls)은 JS가 px 좌표로 움직이므로 확대하지 않는다(아이템 버튼만 예외). */
 @supports (zoom:1){
-  #hud > .ui-hud,.ui-screen,.ui-confirm-box,.ui-choose-box,.review-banner,.review-btns,.ctl-item{zoom:var(--ui-scale,1)}
+  #hud > .ui-hud,#dock,.ui-screen,.ui-confirm-box,.ui-choose-box,.review-banner,.review-btns,.ctl-item{zoom:var(--ui-scale,1)}
   .px-modal-back{max-width:calc(var(--app-w,480px) / var(--ui-scale,1))}
 }
 /* 좁은 휴대폰(≤380px): 보기 모양 기호를 구석으로 옮겨 긴 뜻(공원을 청소하다 등)이 들어갈 자리를 만든다 */
@@ -378,3 +378,106 @@ body{background-color:#0c0820;
 
 /* 저작권 표시 */
 .px-copy { margin: 14px 0 6px; text-align: center; font-size: 10px; line-height: 1.4; color: rgba(255,255,255,.45); pointer-events: none; }
+
+/* ---- 'split' 레이아웃(게임 모듈이 fullscreen:false, layout:'split' 선언): HUD(흐름) -> #stage(캔버스) -> #dock(DOM) ----
+   논리 높이는 main.js가 실제 무대 픽셀 비율로 정한다(360 x 200..640). dock 높이는 CSS px(--dock-h, --ui-scale만큼 확대).
+   낮은 화면은 dock을 줄이고(미디어 쿼리), 그래도 무대가 논리 180 아래면 JS가 .dock-tight를 붙인다. 게임은 ctx.dock.style.setProperty('--dock-h', ...) 후 ctx.resizeStage() */
+#dock{flex:0 0 auto;position:relative;height:var(--dock-h,236px);overflow:hidden;z-index:5;background:#211850;border-top:3px solid #0b0620;touch-action:manipulation}
+#dock[hidden]{display:none}
+#app.split #hud.hidden{display:block!important;visibility:hidden} /* 리뷰 중에도 무대 크기가 변하지 않게 자리는 유지 */
+#app.split{--dock-h:236px}
+@media (max-height:620px){#app.split{--dock-h:204px}}
+@media (max-height:520px){#app.split{--dock-h:184px}}
+#app.split.dock-tight{--dock-h:168px}
+.ui-hud.no-energy .ui-hud-score{flex:1 1 auto;max-width:none}
+.ui-hud-energy[hidden]{display:none}
+/* 아레나 터치: 무대 전체가 터치 영역(왼쪽 절반 = left, 오른쪽 절반 = right) */
+#controls.layout-arena{top:0;height:auto}
+.ctl-arena{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+
+/* ---- 인라인 퀴즈 패널(js/ui/quiz-panel.js): dock 안 문제 + 보기 2x2 ---- */
+.ui-qp{height:100%;display:flex;flex-direction:column;gap:8px;padding:8px 10px;color:#fff}
+.ui-qp button{font-family:inherit;color:#fff;cursor:pointer;touch-action:manipulation}
+.ui-qp button:disabled{cursor:default}
+.ui-qp-q{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:40px;font-weight:900;line-height:1.1;
+  background:#fff;color:#1b1340;border-radius:16px;padding:4px 10px;word-break:keep-all;overflow:hidden}
+.ui-qp-q.word{flex-direction:column;gap:2px}
+.ui-qp-q .ui-q-word{font-size:32px}
+.ui-qp-q .ui-q-cap{font-size:13px;line-height:1.1}
+.ui-qp-q .ui-speak{width:42px;height:42px;font-size:22px;border-radius:12px;color:#1b1340}
+.ui-qp-q.figure{flex-direction:row;gap:10px}
+.ui-qp-q .ui-q-prompt{font-size:15px;text-align:left}
+.ui-qp-q .ui-q-figure svg{width:76px;height:76px}
+.ui-qp .ui-qp-choices{flex:0 0 auto;gap:8px;align-content:stretch}
+.ui-qp .ui-choice{min-height:56px;font-size:clamp(20px,6vw,26px);box-shadow:0 4px 0 rgba(0,0,0,.3)}
+.ui-qp .ui-choice:active:not(:disabled){box-shadow:0 1px 0 rgba(0,0,0,.3)}
+.ui-qp .ui-choice.right{outline-width:4px}
+.ui-qp .ui-choice.wrong{outline-width:4px}
+.ui-qp.off .ui-choice{opacity:.45}
+.ui-qp.compact{gap:6px;padding:6px 8px}
+.ui-qp.compact .ui-qp-q{font-size:32px;border-radius:12px}
+.ui-qp.compact .ui-qp-q .ui-q-word{font-size:28px}
+.ui-qp.compact .ui-qp-q .ui-speak{width:38px;height:38px;font-size:20px}
+.ui-qp.compact .ui-qp-choices{gap:6px}
+.ui-qp.compact .ui-choice{min-height:52px;font-size:clamp(18px,5.6vw,23px);padding:4px 16px}
+.ui-qp.compact .ui-choice .ui-shape{position:absolute;left:4px;top:2px;font-size:12px}
+.ui-qp.compact .ui-choice{position:relative}
+.ui-qp.compact .ui-q-figure svg{width:60px;height:60px}
+@media (max-height:620px){
+  .ui-qp{gap:6px;padding:6px 8px}
+  .ui-qp-q{font-size:32px}
+  .ui-qp-q .ui-q-word{font-size:28px}
+  .ui-qp .ui-qp-choices{gap:6px}
+  .ui-qp .ui-choice{min-height:52px;font-size:clamp(18px,5.6vw,23px)}
+}
+
+/* ---- 타이탄 러시 dock (js/games/titans/index.js): 위 = 강화 띠(골드 + 연속 정답 점 / 검 / 동료), 아래 = 인라인 퀴즈 패널 ---- */
+.ti-dock{height:100%;display:flex;flex-direction:column;color:#fff;font-family:inherit}
+.ti-row{flex:0 0 auto;height:46px;display:flex;align-items:stretch;gap:5px;padding:4px 8px 0}
+.ti-gold{flex:0 0 auto;width:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:10px;background:rgba(255,255,255,.12);color:#ffe27a;white-space:nowrap;overflow:hidden}
+.ti-gold-l{display:flex;align-items:center;gap:3px;font-size:14px;font-weight:900;line-height:1}
+.ti-coin{font-size:13px}
+.ti-streak{display:flex;align-items:center;justify-content:center;gap:3px;height:9px;font-size:10px;font-weight:900;color:#fff;line-height:1}
+.ti-pip{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.ti-pip.on{background:#7cf0ff;box-shadow:0 0 0 1px #1b1340}
+.ti-gold.od{background:linear-gradient(90deg,#2a6bff,#7cf0ff);animation:ti-can .4s steps(2) infinite}
+.ti-gold.od .ti-streak{color:#1b1340;font-size:11px}
+.ti-up{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:1px 4px;border:0;border-radius:10px;background:#3b2d86;color:#fff;font-family:inherit;font-weight:800;cursor:pointer;touch-action:manipulation;
+  box-shadow:0 3px 0 #1b1340,inset 0 2px 0 rgba(255,255,255,.18);opacity:.62}
+.ti-up-t{font-size:14px;line-height:1.1;white-space:nowrap}
+.ti-up-c{font-size:13px;line-height:1.1;color:#ffe27a;white-space:nowrap}
+.ti-up.can{opacity:1;background:#1f9a4a;box-shadow:0 3px 0 #0e5a28,inset 0 2px 0 rgba(255,255,255,.3);animation:ti-can 1s steps(2) infinite}
+.ti-up:active{transform:translateY(2px);box-shadow:0 1px 0 #1b1340}
+.ti-up.nope{animation:ti-nope .3s linear}
+@keyframes ti-can{50%{filter:brightness(1.22)}}
+@keyframes ti-nope{20%{transform:translateX(-4px)}60%{transform:translateX(4px)}}
+.ti-qwrap{flex:1 1 0;min-height:0}
+/* dock 안의 퀴즈 패널: 낮은 dock(220px)에서도 보기 버튼 48px 이상 + 문제가 겹치지 않게 */
+.ti-dock .ui-qp{gap:5px;padding:5px 8px 6px}
+.ti-dock .ui-qp-q{border-radius:12px;padding:2px 8px}
+.ti-dock .ui-qp .ui-choice{min-height:48px;font-size:clamp(18px,5.4vw,24px);padding:2px 14px}
+.ti-dock .ui-qp .ui-qp-choices{gap:6px}
+.ti-dock .ui-qp-q.figure .ui-q-figure{height:100%;min-height:0}
+.ti-dock .ui-qp-q.figure .ui-q-figure svg{height:100%;width:auto;max-width:100%;aspect-ratio:1}
+@media (max-height:640px){
+  .ti-dock .ui-qp-q{font-size:28px}
+  .ti-dock .ui-qp-q .ui-q-word{font-size:24px}
+  .ti-dock .ui-qp-q.word{gap:0}
+  .ti-dock .ui-qp-q .ui-q-cap{line-height:1}
+  .ti-dock .ui-qp-q .ui-speak{width:30px;height:30px;font-size:16px;border-radius:9px}
+  .ti-dock .ui-qp-q .ui-q-cap{font-size:11px}
+  .ti-dock .ui-qp-q .ui-q-prompt{font-size:12px}
+}
+/* 에너지 막대: 20칸 눈금 + 에너지 0일 때 흔들림(js/ui/hud.js setEnergyCells / shakeEnergy) */
+.ui-hud-energy.cells::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent calc(100% / var(--cells,20) - 1.5px),rgba(27,19,64,.75) calc(100% / var(--cells,20) - 1.5px),rgba(27,19,64,.75) calc(100% / var(--cells,20)))}
+.ui-hud-energy.cells .ui-hud-fill{transition:width .1s}
+.ui-hud-energy.cells .ui-hud-num{z-index:1}
+.ui-hud-energy.shake{animation:ti-eshake .5s linear;box-shadow:0 0 0 2px #ff4d6d}
+@keyframes ti-eshake{0%,100%{transform:none}12%{transform:translateX(-5px)}30%{transform:translateX(5px)}48%{transform:translateX(-4px)}66%{transform:translateX(4px)}84%{transform:translateX(-2px)}}
+
+/* 세로 태블릿(폭 700px 이상): 게임 타일 6개를 3열 x 2행으로 */
+@media (min-width:700px) and (orientation:portrait){
+  .px-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .px-tile-name{font-size:15px}
+}

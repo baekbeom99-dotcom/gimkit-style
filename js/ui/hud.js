@@ -12,6 +12,7 @@ export function createHud(root, { energy, hearts, hideHearts, onManualQuiz, onEx
   const $ = (s) => root.querySelector(s);
   const heartsEl = $('.ui-hud-hearts'), fill = $('.ui-hud-fill'), num = $('.ui-hud-num');
   const scoreEl = $('.ui-hud-score'), btn = $('.ui-hud-charge');
+  const energyEl = $('.ui-hud-energy'), hudEl = $('.ui-hud');
   const fsBtn = $('.ui-hud-fs'), exitBtn = $('.ui-hud-exit');
   let destroyed = false;
 
@@ -58,6 +59,18 @@ export function createHud(root, { energy, hearts, hideHearts, onManualQuiz, onEx
   return {
     setScore(text) { scoreEl.textContent = String(text ?? ''); },
     refresh: draw,
+    // 수동 충전(⚡+) 버튼 숨김/표시(기본 표시). 문제풀이 중심 게임용.
+    setChargeEnabled(on) { btn.hidden = !on; },
+    // 에너지 막대 전체 숨김/표시(기본 표시). 숨기면 점수가 남는 폭을 쓴다.
+    setEnergyVisible(on) { energyEl.hidden = !on; hudEl.classList.toggle('no-energy', !on); },
+    // 에너지 막대에 칸 눈금(energy.max칸)을 표시(기본 꺼짐). 칸 수 = energy.max.
+    setEnergyCells(on) { energyEl.classList.toggle('cells', !!on); energyEl.style.setProperty('--cells', String(energy.max)); },
+    // 에너지 막대 흔들기(에너지 0일 때 탭 피드백). 연타해도 애니메이션이 다시 시작된다.
+    shakeEnergy() {
+      energyEl.classList.remove('shake');
+      void energyEl.offsetWidth; // reflow: 애니메이션 재시작
+      energyEl.classList.add('shake');
+    },
     destroy() { destroyed = true; off();
       document.removeEventListener('fullscreenchange', onFsChange);
       document.removeEventListener('webkitfullscreenchange', onFsChange); root.replaceChildren(); },

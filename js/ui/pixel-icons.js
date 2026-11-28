@@ -599,7 +599,65 @@ function paintObby() {
   return p;
 }
 
-const ART = { jump: paintJump, stairs: paintStairs, tower2d: paintTower2d, stack3d: paintStack3d, obby: paintObby };
+// 64x48 titan rush: forest arena, orange hero with a sword in the middle, a wolf rushing from the left, a giant tree boss on the right
+function paintTitans() {
+  const p = new Painter(64, 48);
+  p.gradient(0, 40, ['#7fd4ff', '#b6e8ff', '#e6f7ff', '#ffe9c2']);
+  cloud(p, 14, 7, 0.6); cloud(p, 44, 5, 0.5);
+  p.ellipse(52, 9, 4, 4, '#fff3a0');
+  p.ellipse(10, 40, 18, 7, '#8fd9b2'); p.ellipse(52, 41, 22, 8, '#6cc690');
+  [[4, 39], [14, 39], [26, 39], [36, 39]].forEach(([x, y], i) => {
+    const t = p.sprite(), h = 11 + (i % 2) * 3;
+    t.poly([[x, y - h], [x + 5, y - h + 6], [x - 5, y - h + 6]], '#3aa35d');
+    t.poly([[x, y - h + 4], [x + 6, y - h + 11], [x - 6, y - h + 11]], '#2b8449');
+    t.rect(x - 1, y - 2, 2, 3, '#6b4220');
+    t.outline('#1f1238');
+    p.blit(t);
+  });
+  p.rect(0, 41, 64, 7, '#8a5a2b'); p.rect(0, 41, 64, 3, '#52c24a'); p.rect(0, 41, 64, 1, '#9aee6a'); p.rect(0, 40, 64, 1, '#1c3a14');
+  for (let i = 0; i < 64; i += 9) { p.rect(i, 45, 4, 1, '#6b4220'); p.rect(i + 4, 47, 3, 1, '#a4733c'); }
+  // boss: ancient forest giant
+  const b = p.sprite();
+  b.rect(40, 24, 7, 17, '#7e4e26'); b.rect(52, 24, 7, 17, '#7e4e26');
+  b.rect(38, 14, 24, 22, '#7e4e26');
+  b.rect(38, 14, 3, 22, '#aa713b'); b.rect(58, 14, 4, 22, '#4f2e14');
+  for (let i = 0; i < 4; i++) b.rect(44 + i * 4, 18, 1, 16, '#4f2e14');
+  b.line(38, 20, 30, 28, '#7e4e26'); b.line(38, 21, 30, 29, '#7e4e26'); b.rect(27, 27, 4, 4, '#7e4e26');
+  [[40, 11, 5], [47, 8, 5.5], [54, 9, 5], [60, 12, 4]].forEach(([x, y, r]) => { b.ellipse(x, y, r, r * 0.85, '#3aa35d'); b.ellipse(x - 1, y - 1, r * 0.45, r * 0.35, '#7be27a'); });
+  b.outline('#1f1238');
+  p.blit(b);
+  const f = p.sprite();
+  f.poly([[41, 20], [47, 22], [44, 24], [41, 23]], '#ffe14d'); f.poly([[56, 20], [50, 22], [53, 24], [56, 23]], '#ffe14d');
+  f.set(44, 22, '#1b1340'); f.set(53, 22, '#1b1340');
+  f.rect(44, 28, 9, 3, '#2a1208'); f.set(45, 28, '#f1e6c8'); f.set(48, 28, '#f1e6c8'); f.set(51, 28, '#f1e6c8');
+  p.blit(f);
+  // wolf rushing in from the left
+  const w = p.sprite();
+  w.line(2, 34, 0, 31, '#8a909e');
+  w.ellipse(8, 36, 5.5, 3.2, '#8a909e'); w.ellipse(8, 37, 3.5, 1.4, '#cdd2de');
+  w.ellipse(14, 33, 3.2, 2.8, '#8a909e'); w.poly([[16, 32], [20, 34], [16, 36]], '#8a909e');
+  w.poly([[12, 31], [12, 27], [15, 31]], '#4a4f5e');
+  w.set(15, 32, '#ffd23f'); w.set(19, 34, '#1b1340'); w.set(17, 36, '#ffffff');
+  w.line(5, 39, 4, 41, '#4a4f5e'); w.line(7, 39, 8, 41, '#8a909e'); w.line(11, 39, 10, 41, '#4a4f5e'); w.line(13, 39, 14, 41, '#8a909e');
+  w.outline('#1f1238');
+  p.blit(w);
+  // hero
+  const c = p.sprite();
+  const cx = 28, cy = 35;
+  c.rect(cx + 4, cy - 7, 1, 8, '#dfe6f5'); c.rect(cx + 5, cy - 9, 1, 8, '#ffffff'); c.rect(cx + 3, cy + 1, 4, 1, '#ffd23f');
+  c.line(cx + 4, cy - 8, cx + 7, cy - 14, '#dfe6f5'); c.line(cx + 5, cy - 9, cx + 8, cy - 15, '#ffffff');
+  c.ellipse(cx, cy, 5, 4.6, '#ff9a2e');
+  c.ellipse(cx - 2, cy - 2, 1.8, 1.2, '#ffd08a');
+  c.rect(cx - 4, cy - 4, 9, 1, '#e8324a'); c.set(cx - 5, cy - 3, '#e8324a'); c.set(cx - 6, cy - 2, '#e8324a');
+  c.rect(cx - 1, cy - 2, 2, 2, '#ffffff'); c.rect(cx + 2, cy - 2, 2, 2, '#ffffff');
+  c.set(cx, cy - 1, '#1b1340'); c.set(cx + 3, cy - 1, '#1b1340');
+  c.set(cx - 2, cy + 5, '#d9651a'); c.set(cx + 2, cy + 5, '#d9651a');
+  c.outline('#4a1a06');
+  p.blit(c);
+  return p;
+}
+
+const ART = { jump: paintJump, stairs: paintStairs, tower2d: paintTower2d, stack3d: paintStack3d, obby: paintObby, titans: paintTitans };
 
 function paintToCanvas(p, name, opts) {
   const cv = document.createElement('canvas');

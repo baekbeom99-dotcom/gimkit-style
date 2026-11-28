@@ -7,7 +7,7 @@ import { createInput } from './core/input.js';
 import { createSfx } from './core/audio.js';
 import { registry } from './games/registry.js';
 import { reviewText, normalizeChoose, createSerialQueue } from './core/overlay-opts.js';
-import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr, backingScale } from './core/layout.js';
+import { appWidth, uiScale, isLandscapePhone, logicalHeight, portraitStage, canvasFit, canvasDpr, backingScale, splitLogicalHeight, SPLIT_TIGHT_H } from './core/layout.js';
 
 const W = 360, MAX_HEARTS = 3;
 let H = 640; // 논리 높이. fullscreen 게임은 화면 비율에 맞춰 늘어남(폭 360 고정)
@@ -43,7 +43,7 @@ function syncBacking() {
 
 // fullscreen 캔버스를 무대에 맞춘다: 비율이 같으면 꽉 채우고, 다르면(게임 중 회전/창 크기 변경) 늘리지 않고 가운데 맞춤.
 function placeCanvas() {
-  const full = $('app').classList.contains('full');
+  const full = $('app').classList.contains('full') || $('app').classList.contains('split');
   const r = $('stage').getBoundingClientRect();
   const fit = full ? canvasFit(r.width, r.height, W, H) : { mode: 'none' };
   canvas.classList.toggle('fill', fit.mode === 'fill');
@@ -52,13 +52,43 @@ function placeCanvas() {
   canvas.style.height = fit.mode === 'contain' ? fit.height + 'px' : '';
 }
 
-// fullscreen 게임: 캔버스를 화면 전체에 채우고(HUD는 위에 겹침) 논리 높이를 화면 비율에 맞춘다.
-// 논리 높이는 게임 시작 때 한 번만 정한다(게임이 ctx.height를 기억하므로). 이후 크기 변화는 placeCanvas가 처리.
-function fitCanvas(full) {
-  $('app').classList.toggle('full', !!full);
-  canvas.classList.toggle('fill', !!full);
+// split 게임: 무대(HUD 아래 ~ dock 위)의 실제 픽셀 비율로 논리 높이를 정한다(clamp 200..640, 폭 360 고정).
+// 무대가 너무 낮으면(논리 180 미만) #app.dock-tight로 dock을 줄여 다시 잰다.
+function measureSplit() {
+  const app = $('app');
+  let r = $('stage').getBoundingClientRect();
+  if (r.width > 0 && W * r.height / r.width < SPLIT_TIGHT_H && !app.classList.contains('dock-tight')) {
+    app.classList.add('dock-tight');
+    r = $('stage').getBoundingClientRect();
+  }
+  return splitLogicalHeight(r.width, r.height, W);
+}
+
+// split 게임의 논리 높이를 다시 잰다(dock 높이를 바꿨거나 화면이 바뀐 뒤). 캔버스 해상도·맞춤도 갱신. 새 { width, height } 반환.
+function refitSplit() {
+  if (!$('app').classList.contains('split')) return { width: W, height: H };
+  $('app').classList.remove('dock-tight');
+  H = measureSplit();
+  syncBacking();
+  placeCanvas();
+  return { width: W, height: H };
+}
+
+// 게임 레이아웃: 'full'(화면 전체, HUD 겹침) | 'split'(HUD -> 무대 -> dock 세로 배치) | 그 밖(고정 360x640 기둥).
+// fullscreen 논리 높이는 게임 시작 때 한 번만 정한다(게임이 ctx.height를 기억하므로). 이후 크기 변화는 placeCanvas가 처리.
+// split은 ctx.width/height가 getter라서 resizeStage()/화면 회전 뒤에 바뀐 값이 바로 보인다.
+function fitCanvas(full, split = false) {
+  const app = $('app'), dock = $('dock');
+  app.classList.toggle('full', !!full && !split);
+  app.classList.toggle('split', !!split);
+  app.classList.remove('dock-tight');
+  dock.hidden = !split;
+  dock.replaceChildren(); // 게임이 붙인 내용은 시작/끝마다 비운다
+  dock.removeAttribute('style');
+  canvas.classList.toggle('fill', !!full || !!split);
   let h = 640;
-  if (full) {
+  if (split) h = measureSplit();
+  else if (full) {
     const r = $('stage').getBoundingClientRect();
     if (isLandscapePhone(window.innerWidth, window.innerHeight)) { // 가로 휴대폰: 세로로 돌렸을 때 기준
       const p = portraitStage(window.innerWidth, window.innerHeight);
@@ -102,7 +132,7 @@ function createBasicHud(root, { energy, hearts, hideHearts }) {
   if (hideHearts) h.hidden = true;
   const off = energy.subscribe(draw);
   draw();
-  return { setScore: (t) => { s.textContent = t; }, refresh: draw, destroy() { off(); root.replaceChildren(); } };
+  return { setScore: (t) => { s.textContent = t; }, refresh: draw, setChargeEnabled() {}, setEnergyVisible(on) { bar.parentNode.hidden = !on; }, destroy() { off(); root.replaceChildren(); } };
 }
 
 // ---- game session state ----
@@ -276,17 +306,29 @@ async function startGame(sel) {
     return result;
   }
 
-  fitCanvas(!!mod.fullscreen);
+  const split = mod.layout === 'split';
+  fitCanvas(!!mod.fullscreen, split);
   const ctx = {
-    canvas, g2d, width: W, height: H,
+    canvas, g2d,
+    get width() { return W; },   // 논리 크기는 getter: split 게임은 화면/dock 변화에 따라 height가 바뀐다
+    get height() { return H; },
+    session,                     // 퀴즈 세션(createQuizSession)
+    dock: split ? $('dock') : null, // split 게임의 하단 DOM 슬롯(시작/끝에 자동 표시·비움)
+    resizeStage: () => (active === state && !state.ended ? refitSplit() : { width: W, height: H }),
     // taps while a quiz is open (e.g. keyboard during 미리 충전) must not reach the paused game
     input: {
       held: input.held,
-      on: (n, fn) => input.on(n, () => { if (!state.paused && !state.ended && !state.reviewing) fn(); }),
+      on: (n, fn) => input.on(n, (...a) => { if (!state.paused && !state.ended && !state.reviewing) fn(...a); }),
       setItem: (s) => input.setItem && input.setItem(s), // 2D 탑쌓기 아이템 버튼(개수/사용 가능)
     },
     energy, hearts, requestQuiz, choose, endGame, sfx, rng: Math.random,
-    hud: { setScore: (t) => hud.setScore(t) },
+    hud: {
+      setScore: (t) => hud.setScore(t),
+      setChargeEnabled: (on) => { if (hud.setChargeEnabled) hud.setChargeEnabled(on); },
+      setEnergyVisible: (on) => { if (hud.setEnergyVisible) hud.setEnergyVisible(on); },
+      setEnergyCells: (on) => { if (hud.setEnergyCells) hud.setEnergyCells(on); },
+      shakeEnergy: () => { if (hud.shakeEnergy) hud.shakeEnergy(); },
+    },
   };
   state.ctx = ctx;
 
@@ -336,8 +378,14 @@ function onResize() {
   applyLayoutVars();
   const st = active;
   if (st && !st.ended) {
-    placeCanvas();
-    if (syncBacking() && st.game && (st.paused || st.blocked || st.reviewing)) { // 멈춘 동안 비워진 캔버스를 한 번 다시 그림
+    let resized = false;
+    if (st.ctx && $('app').classList.contains('split')) { // 화면 크기/회전: 논리 높이를 다시 잼(늘리지 않음)
+      const before = H, cw = canvas.width, ch = canvas.height;
+      refitSplit();
+      resized = canvas.width !== cw || canvas.height !== ch; // 높이나 해상도가 바뀌어 캔버스가 비워짐
+      if (H !== before && st.game && st.game.resize) { try { st.game.resize({ width: W, height: H }); } catch (e) { console.error(e); } }
+    } else placeCanvas();
+    if ((syncBacking() || resized) && st.game && (st.paused || st.blocked || st.reviewing)) { // 멈춘 동안 비워진 캔버스를 한 번 다시 그림
       try { g2d.setTransform(dpr, 0, 0, dpr, 0, 0); st.game.render(); } catch (e) { console.error(e); }
     }
   }
@@ -384,7 +432,7 @@ function teardown(state) {
   try { state.hud && state.hud.destroy && state.hud.destroy(); } catch (e) { console.error(e); }
   $('hud').replaceChildren();
   input.setLayout('none');
-  fitCanvas(false);
+  fitCanvas(false, false);
   updateRotate();
 }
 

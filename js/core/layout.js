@@ -61,3 +61,19 @@ export function backingScale(devicePixelRatio, stageW, W = 360) {
   const k = stageW > W ? stageW / W : 1;
   return Math.min(4, Math.round(d * k * 100) / 100);
 }
+
+// ---- 'split' 레이아웃(HUD -> 무대 -> 하단 dock 세로 배치) ----
+export const SPLIT_MIN_H = 200; // 분할 게임 논리 높이 하한
+export const SPLIT_MAX_H = 640; // 상한
+export const SPLIT_TIGHT_H = 180; // 이보다 낮아지면 dock을 줄인다(main.js가 .dock-tight)
+
+// split 게임의 논리 높이: 무대 픽셀 비율에서 구한다(폭 W 고정). 늘어나지 않도록 H = round(W * 무대높이 / 무대폭).
+export function splitLogicalHeight(stageW, stageH, W = 360, min = SPLIT_MIN_H, max = SPLIT_MAX_H) {
+  if (!(stageW > 0) || !(stageH > 0)) return 320;
+  return Math.min(max, Math.max(min, Math.round(W * stageH / stageW)));
+}
+
+// 아레나 터치: 무대의 왼쪽 절반 = 'left', 오른쪽 절반 = 'right'(정확히 가운데는 오른쪽).
+export function arenaSide(clientX, left, width) {
+  return clientX - left < width / 2 ? 'left' : 'right';
+}

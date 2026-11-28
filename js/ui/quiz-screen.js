@@ -1,12 +1,8 @@
 // Gimkit-style quiz overlay. showQuiz({session, energy, mode, need, sfx}) -> Promise<void>
 // (mode 'item' -> Promise<boolean>: true = need개 정답 완료, false = ✕로 닫음)
 import { speak, cancelSpeech } from '../core/tts.js';
-import { renderFigure } from './fraction-figure.js';
-
-const SHAPES = ['▲', '◆', '●', '■'];
-const COLORS = ['red', 'blue', 'yellow', 'green'];
+import { drawQuestion, buildChoices, markResult, SHOW_CORRECT_MS } from './quiz-panel.js'; // 문제/보기 그리기는 인라인 패널과 공유
 const FEEDBACK_OK_MS = 700;
-const SHOW_CORRECT_MS = 1200;
 const FULL_RETURN_MS = 450;
 const ITEM_DONE_MS = 450;
 
@@ -78,76 +74,13 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
       else resolve();
     }
 
-    // 영단어 문제: 큰 단어 + 🔊 다시 듣기 버튼 + 안내 글. 새 문제마다 한 번 자동으로 읽어 준다.
-    function drawWord() {
-      qEl.classList.add('word');
-      const row = document.createElement('div');
-      row.className = 'ui-q-row';
-      const w = document.createElement('span');
-      w.className = 'ui-q-word';
-      w.textContent = q.q;
-      w.style.fontSize = q.q.length > 18 ? '26px' : q.q.length > 11 ? '34px' : '';
-      row.appendChild(w);
-      const text = q.q, lang = q.speak;
-      if (lang) {
-        const sp = document.createElement('button');
-        sp.type = 'button';
-        sp.className = 'ui-speak';
-        sp.setAttribute('aria-label', '다시 듣기');
-        sp.textContent = '🔊';
-        sp.addEventListener('click', () => { if (!done) { spoke = true; speak(text, lang); } });
-        row.appendChild(sp);
-        spoke = true;
-        speak(text, lang);
-      }
-      const cap = document.createElement('div');
-      cap.className = 'ui-q-cap';
-      cap.textContent = q.prompt || '뜻을 골라요';
-      qEl.replaceChildren(row, cap);
-    }
-
-    // 분수 읽기: 안내 글 + 도형 그림(나눈 도형의 일부를 색칠). q.q는 내부 키라서 화면에 쓰지 않는다.
-    function drawFigure() {
-      qEl.classList.remove('word');
-      qEl.classList.add('figure');
-      const cap = document.createElement('div');
-      cap.className = 'ui-q-cap ui-q-prompt';
-      cap.textContent = q.prompt || '색칠한 부분은 전체의 얼마일까요?';
-      const fig = document.createElement('div');
-      fig.className = 'ui-q-figure';
-      renderFigure(fig, q.figure, { size: 160 });
-      qEl.replaceChildren(cap, fig);
-    }
-
-    // 식 문제(구구단·덧셈·뺄셈): '47 + 8' -> '47 + 8 = ?' (이미 '='나 '?'가 있으면 그대로)
-    function equationText(t) { return /[=?]/.test(t) ? t : `${t} = ?`; }
-
     function nextQuestion() {
       if (done) return;
       q = session.next();
-      qEl.classList.remove('figure');
-      choicesEl.classList.toggle('fig', q.kind === 'figure'); // 분수 읽기: 보기를 한 줄로
-      if (q.kind === 'word') drawWord();
-      else if (q.kind === 'figure' && q.figure) drawFigure();
-      else { qEl.classList.remove('word'); qEl.textContent = equationText(q.q); }
+      drawQuestion(qEl, q, { onSpeak: (text, lang) => { spoke = true; speak(text, lang); }, canSpeak: () => !done });
       fb.textContent = '';
       fb.className = 'ui-quiz-fb';
-      choicesEl.replaceChildren();
-      q.choices.forEach((text, i) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = `ui-choice ui-${COLORS[i % 4]}`;
-        b.dataset.i = String(i);
-        const shape = document.createElement('span');
-        shape.className = 'ui-shape';
-        shape.textContent = SHAPES[i % 4];
-        const label = document.createElement('span');
-        label.className = 'ui-label';
-        label.textContent = text;
-        b.append(shape, label);
-        if (i === q.removedIndex) { b.disabled = true; b.classList.add('removed'); }
-        choicesEl.appendChild(b);
-      });
+      buildChoices(choicesEl, q);
       drawStreak();
       locked = false;
     }
@@ -157,10 +90,8 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
       if (!b || locked || done || b.disabled) return;
       locked = true; // set synchronously: all further taps ignored
       const r = session.answer(Number(b.dataset.i));
-      const btns = [...choicesEl.children];
-      btns.forEach((x) => { x.disabled = true; });
+      markResult(choicesEl, b, r); // 모든 버튼 잠금 + 정답/오답 표시
       if (r.correct && item) { // 아이템 모드: 에너지 없음, 정답 개수만 센다
-        b.classList.add('right');
         sfx && sfx.play('correct');
         const complete = item.correct();
         drawStreak();
@@ -175,7 +106,6 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
           timer = setTimeout(nextQuestion, FEEDBACK_OK_MS);
         }
       } else if (r.correct) {
-        b.classList.add('right');
         sfx && sfx.play('correct');
         energy.add(r.gain);
         fb.textContent = `정답! ⚡+${r.gain}`;
@@ -184,10 +114,6 @@ export function showQuiz({ session, energy, mode = 'refill', need = 3, sfx }) {
         if (energy.isFull()) { timer = setTimeout(finish, FULL_RETURN_MS); } // 가득 차면 자동으로 게임 복귀
         else timer = setTimeout(nextQuestion, FEEDBACK_OK_MS);
       } else {
-        b.classList.add('wrong');
-        const c = btns[r.correctIndex];
-        if (c) c.classList.add('right');
-        btns.forEach((x) => { if (x !== c && x !== b) x.classList.add('dim'); });
         sfx && sfx.play('wrong');
         fb.textContent = '아쉬워요! 정답은 이거예요';
         fb.className = 'ui-quiz-fb bad';

@@ -1,20 +1,25 @@
+import { arenaSide } from './layout.js';
+export { arenaSide };
+
 const LAYOUTS = {
   jump: [], // 화면 반분할: 왼쪽 = 다이나믹 조이스틱(buildJoystick), 오른쪽 = 점프(buildJumpZone)
   stairs: [['left', '◀', 'ctl-left'], ['right', '▶', 'ctl-right']],
   tower: [], // 2D 탑쌓기: 왼쪽 = 조이스틱(좌/우/아래), 오른쪽 = 탭(회전 = 'jump' 이벤트)
   tap: [], // 3D 쌓기: 전체 화면 탭 = 'jump' 이벤트(블록 놓기)
+  arena: [], // 타이탄 러시: 무대 전체가 터치 영역. 왼쪽 절반 = 'left', 오른쪽 절반 = 'right'(멀티터치 연타, 'tap' {side}도 발생)
   none: [],
 };
+
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'jump', ' ': 'jump', a: 'left', d: 'right', w: 'jump', ArrowDown: 'down', s: 'down', c: 'item', C: 'item' };
 
 export function createInput(root) {
   const held = { left: false, right: false, jump: false, down: false, item: false };
-  const listeners = { left: new Set(), right: new Set(), jump: new Set(), down: new Set(), item: new Set() };
+  const listeners = { left: new Set(), right: new Set(), jump: new Set(), down: new Set(), item: new Set(), tap: new Set() };
   let itemBtn = null; // 'tower' 레이아웃의 아이템(콘크리트) 버튼
   const pointers = new Map(); // pointerId -> name
   let layout = 'none';
 
-  function fire(name) { for (const fn of [...listeners[name]]) fn(); }
+  function fire(name, arg) { for (const fn of [...listeners[name]]) fn(arg); }
   function press(name) { held[name] = true; fire(name); }
   function release(name) {
     for (const n of pointers.values()) if (n === name) return;
@@ -32,6 +37,7 @@ export function createInput(root) {
     if (layout === 'jump') { buildJoystick(); buildJumpZone(); }
     else if (layout === 'tower') { buildJoystick({ down: true }); buildTapZone('half'); buildItemButton(); }
     else if (layout === 'tap') buildTapZone('full');
+    else if (layout === 'arena') buildArenaZone();
     for (const [name, label, cls] of LAYOUTS[layout]) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -221,6 +227,30 @@ export function createInput(root) {
     zone.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
+  // 아레나: 무대 전체가 터치 영역. 손가락 하나마다 pointerdown 한 번 = 이벤트 한 번(디바운스·중복 제거 없음, 멀티터치 연타).
+  function buildArenaZone() {
+    const zone = document.createElement('div');
+    zone.className = 'ctl-arena';
+    root.appendChild(zone);
+    zone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const r = zone.getBoundingClientRect();
+      const side = arenaSide(e.clientX, r.left, r.width);
+      pointers.set(e.pointerId, side);
+      press(side);
+      fire('tap', { side });
+    });
+    const end = (e) => {
+      const side = pointers.get(e.pointerId);
+      if (!side) return;
+      pointers.delete(e.pointerId);
+      release(side);
+    };
+    zone.addEventListener('pointerup', end);
+    zone.addEventListener('pointercancel', end);
+    zone.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
   // 아이템 버튼: 오른쪽 회전 영역 위에 떠 있고, 눌러도 회전(jump)은 일어나지 않는다.
   function buildItemButton() {
     const b = document.createElement('button');
@@ -263,6 +293,7 @@ export function createInput(root) {
     if (e.repeat || keyDown.has(e.key)) return;
     keyDown.add(e.key);
     press(name);
+    if (layout === 'arena' && name !== 'down') fire('tap', { side: name === 'left' || name === 'right' ? name : 'center' });
   }
   function onKeyUp(e) {
     const name = KEYS[e.key];
