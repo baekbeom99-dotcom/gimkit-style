@@ -641,18 +641,20 @@ function paintTitans() {
   w.line(5, 39, 4, 41, '#4a4f5e'); w.line(7, 39, 8, 41, '#8a909e'); w.line(11, 39, 10, 41, '#4a4f5e'); w.line(13, 39, 14, 41, '#8a909e');
   w.outline('#1f1238');
   p.blit(w);
-  // hero
+  // hero: Sword Master matching in-game blue tunic + brown spiky hair + crimson scarf
   const c = p.sprite();
   const cx = 28, cy = 35;
   c.rect(cx + 4, cy - 7, 1, 8, '#dfe6f5'); c.rect(cx + 5, cy - 9, 1, 8, '#ffffff'); c.rect(cx + 3, cy + 1, 4, 1, '#ffd23f');
   c.line(cx + 4, cy - 8, cx + 7, cy - 14, '#dfe6f5'); c.line(cx + 5, cy - 9, cx + 8, cy - 15, '#ffffff');
-  c.ellipse(cx, cy, 5, 4.6, '#ff9a2e');
-  c.ellipse(cx - 2, cy - 2, 1.8, 1.2, '#ffd08a');
-  c.rect(cx - 4, cy - 4, 9, 1, '#e8324a'); c.set(cx - 5, cy - 3, '#e8324a'); c.set(cx - 6, cy - 2, '#e8324a');
-  c.rect(cx - 1, cy - 2, 2, 2, '#ffffff'); c.rect(cx + 2, cy - 2, 2, 2, '#ffffff');
-  c.set(cx, cy - 1, '#1b1340'); c.set(cx + 3, cy - 1, '#1b1340');
-  c.set(cx - 2, cy + 5, '#d9651a'); c.set(cx + 2, cy + 5, '#d9651a');
-  c.outline('#4a1a06');
+  c.rect(cx - 7, cy + 1, 2, 2, '#d62843'); c.rect(cx - 5, cy, 3, 2, '#d62843');
+  c.rect(cx - 3, cy + 1, 6, 4, '#2f5fd0'); c.rect(cx - 3, cy + 4, 6, 1, '#7a4419'); c.set(cx, cy + 4, '#ffd23f');
+  c.ellipse(cx, cy - 2, 4.2, 3.6, '#ffd9a8');
+  c.rect(cx - 4, cy - 6, 8, 2, '#4a2914'); c.set(cx - 2, cy - 7, '#4a2914'); c.set(cx + 2, cy - 7, '#4a2914');
+  c.rect(cx - 4, cy - 5, 9, 1, '#e8324a'); c.set(cx - 5, cy - 4, '#e8324a'); c.set(cx - 6, cy - 3, '#e8324a');
+  c.rect(cx - 1, cy - 3, 2, 2, '#ffffff'); c.rect(cx + 2, cy - 3, 2, 2, '#ffffff');
+  c.set(cx, cy - 2, '#1b1340'); c.set(cx + 3, cy - 2, '#1b1340');
+  c.rect(cx - 3, cy + 5, 2, 2, '#6b3b16'); c.rect(cx + 1, cy + 5, 2, 2, '#6b3b16');
+  c.outline('#1b1340');
   p.blit(c);
   return p;
 }

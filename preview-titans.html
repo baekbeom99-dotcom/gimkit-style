@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사부작스쿨 — 타이탄 러시 시각 미리보기</title>
+<style>
+  :root {
+    --bg: #130d2e;
+    --surface: #211850;
+    --border: rgba(255,255,255,0.14);
+    --text: #f5f3ff;
+    --muted: #c2b9ea;
+    --accent: #ffd23f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    padding: 20px 16px 36px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0; font-size: 24px; font-weight: 900; color: var(--accent); }
+  .sub { margin: 0; font-size: 14px; color: var(--muted); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text);
+  }
+  canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 360 / 320;
+    border-radius: 10px;
+    display: block;
+    background: #0b0620;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>타이탄 러시 — 그래픽 개선 미리보기</h1>
+    <p class="sub">초록 숲 / 네온 시티 · 웨이브 &amp; 보스 페이즈 실시간 렌더</p>
+  </header>
+  <div class="grid">
+    <section class="card"><h2>🌲 초록 숲 · 좌우 웨이브 + 동료</h2><canvas id="c0" width="360" height="320"></canvas></section>
+    <section class="card"><h2>🌲 고대 숲 거인 · 보스전</h2><canvas id="c1" width="360" height="320"></canvas></section>
+    <section class="card"><h2>🏙 네온 시티 · 로켓 늑대 웨이브</h2><canvas id="c2" width="360" height="320"></canvas></section>
+    <section class="card"><h2>🏙 메카 울프 · 보스전 + 오버드라이브</h2><canvas id="c3" width="360" height="320"></canvas></section>
+  </div>
+</div>
+<script type="module">
+import { createTitans, biomeOf } from './js/games/titans/logic.js';
+import { createFx, fxEvents, fxUpdate, drawTitans } from './js/games/titans/render.js';
+
+const seeded = (s) => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+
+function makeScene(biome, mode) {
+  const energy = { value: 20, max: 20, spend() { return true; }, add() { return 20; } };
+  const s = createTitans({ rng: seeded(7 + biome), energy });
+  s.stage = biome + 1;
+  s.biome = biomeOf(s.stage);
+  s.swordLv = 12;
+  s.allyLv = 12;
+  if (mode === 'wave') {
+    for (let i = 0; i < 45; i++) s.update(0.05);
+  } else {
+    s.wave.killed = s.wave.target;
+    s.update(0.05);
+    s.boss.hp = Math.round(s.boss.maxHp * 0.45);
+    s.update(0.05);
+    s.skipToWindow();
+    if (biome === 1) s.buffs.overdrive = 5;
+  }
+  const fx = createFx(seeded(9 + biome));
+  fxEvents(fx, s.drainEvents(), s);
+  fx.banner = null;
+  fx.land = 0;
+  return { s, fx };
+}
+
+const scenes = [
+  { el: document.getElementById('c0'), ...makeScene(0, 'wave'), hints: 'wave' },
+  { el: document.getElementById('c1'), ...makeScene(0, 'boss'), hints: 'boss' },
+  { el: document.getElementById('c2'), ...makeScene(1, 'wave'), hints: 'wave' },
+  { el: document.getElementById('c3'), ...makeScene(1, 'boss'), hints: 'boss' },
+];
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  const t = now / 1000;
+  for (const sc of scenes) {
+    fxUpdate(sc.fx, dt, sc.s);
+    if (Math.floor(t * 2) !== Math.floor((t - dt) * 2)) {
+      fxEvents(sc.fx, [{ type: 'hit', boss: sc.s.phase === 'boss', id: sc.s.enemies[0]?.id, x: sc.s.enemies[0]?.x ?? 0.72, dmg: 1280, crit: Math.floor(t) % 2 === 0, source: 'tap' }], sc.s);
+    }
+    const g = sc.el.getContext('2d');
+    drawTitans(g, 360, 320, { s: sc.s, hints: sc.hints }, sc.fx, t);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
